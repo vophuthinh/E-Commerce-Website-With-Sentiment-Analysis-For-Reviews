@@ -13,7 +13,6 @@ router.post(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { groupTitle, userId, sellerId } = req.body;
-      console.log(req.body,'req.body')
       const isConversationExist = await Conversation.findOne({
         where: { groupTitle: groupTitle },
       });
@@ -51,12 +50,10 @@ router.get(
     try {
       const sellerId = req.params.id;
       const conversations = await Conversation.findAll({});
-      console.log(sellerId,'sellerId')
       const filteredConversations = conversations.filter((conversation) => {
         const membersArray = conversation.members
         .replace(/[\[\]']+/g, '')  
         .split(',');     
-        console.log(membersArray,'conversation')
         return membersArray.includes(sellerId); 
       });
       if (filteredConversations.length === 0) {
@@ -75,7 +72,6 @@ router.get(
         conversations: updatedProducts,
       });
     } catch (error) {
-      console.error(error);
       return next(new ErrorHandler(error.message, 500));
     }
   })
@@ -89,7 +85,6 @@ router.get(
     try {
       const sellerId = req.params.id;
       const conversations = await Conversation.findAll({});
-      console.log(sellerId,'sellerId')
       const filteredConversations = conversations.filter((conversation) => {
         const membersArray = conversation.members
         .replace(/[\[\]']+/g, '')  

@@ -154,7 +154,7 @@ router.delete(
 
         fs.unlink(filePath, (err) => {
           if (err) {
-            console.log(err);
+            // Error deleting file, continue anyway
           }
         });
       });

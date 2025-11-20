@@ -13,10 +13,26 @@ const { isAuthenticated, isAdmin } = require('../middleware/auth');
 const cloudinary = require('cloudinary');
 const bcrypt = require('bcryptjs');
 
-router.post('/create-user', upload.single('file'), async (req, res, next) => {
+router.post('/create-user', upload.single('file'), catchAsyncErrors(async (req, res, next) => {
     try {
+        if (!req.file) {
+            return next(new ErrorHandler('Avatar image is required', 400));
+        }
         const { name, email, password } = req.body;
-        console.log(req.file);
+        
+        // Basic validation
+        if (!name || !email || !password) {
+            if (req.file) {
+                const filePath = `uploads/${req.file.filename}`;
+                fs.unlink(filePath, (err) => {
+                    if (err) {
+                        // Log error but don't block
+                    }
+                });
+            }
+            return next(new ErrorHandler('Please provide all required fields', 400));
+        }
+        
         const userEmail = await User.findOne({ where: { email } });
 
         if (userEmail) {
@@ -24,22 +40,21 @@ router.post('/create-user', upload.single('file'), async (req, res, next) => {
             const filePath = `uploads/${filename}`;
             fs.unlink(filePath, (err) => {
                 if (err) {
-                    console.log(err);
-                    res.status(500).json({ message: 'Error deleting file' });
+                    // Log error but don't block response
                 }
             });
-            return next(new ErrorHandler('Users have existed', 400));
+            return next(new ErrorHandler('User already exists with this email', 400));
         }
         const filename = req.file.filename;
         const fileUrl = path.join(filename);
+        // Don't include password in token - it will be sent separately during activation
         const user = {
             name: name,
             email: email,
-            password: password,
             avatar: fileUrl,
         };
         const activationToken = createActivationToken(user);
-        const activationUrl = `http://localhost:3000/activation/${activationToken}`;
+        const activationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/activation/${activationToken}`;
         try {
             await sendMail({
                 email: user.email,
@@ -51,20 +66,22 @@ router.post('/create-user', upload.single('file'), async (req, res, next) => {
                 message: `Vui lòng kiểm tra Email:- ${user.email} để kích hoạt tài khoản!`,
             });
         } catch (error) {
-            return res.json({
-                message: error.message,
-            });
+            return next(new ErrorHandler(error.message, 500));
         }
     } catch (error) {
-        return res.json({
-            message: error.message,
-        });
+        return next(new ErrorHandler(error.message, 500));
     }
-});
+}));
 
 // create activation token
 const createActivationToken = (user) => {
-    return jwt.sign(user, 'B2hFTxy%M#WaHgD6$5Wex2o@b*9J7u', {
+    // Only include necessary fields, not password
+    const tokenData = {
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar
+    };
+    return jwt.sign(tokenData, process.env.JWT_SECRET, {
         expiresIn: '5m',
     });
 };
@@ -74,14 +91,18 @@ router.post(
     '/activation',
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const { activation_token } = req.body;
+            const { activation_token, password } = req.body;
 
-            const newUser = jwt.verify(activation_token, 'B2hFTxy%M#WaHgD6$5Wex2o@b*9J7u');
+            const newUser = jwt.verify(activation_token, process.env.JWT_SECRET);
 
             if (!newUser) {
                 return next(new ErrorHandler('Token không hợp lệ', 400));
             }
-            const { name, email, password, avatar } = newUser;
+            const { name, email, avatar } = newUser;
+            
+            if (!password) {
+                return next(new ErrorHandler('Vui lòng cung cấp mật khẩu', 400));
+            }
             const hashedPassword = await bcrypt.hash(password, 10);
             let user = await User.findOne({ where: { email } });
             if (user) {
@@ -234,7 +255,6 @@ router.put(
             if (!user) {
                 return next(new ErrorHandler('User not found', 404));
             }
-            console.log(user);
             const newAdd = JSON.parse(user.addresses || '[]');
             const sameTypeAddress = newAdd.find((address) => address.addressType === req.body.addressType);
             if (sameTypeAddress) {
@@ -270,7 +290,6 @@ router.delete(
             const userId = req.user.id;
             const addressId = req.params.id;
 
-            console.log(addressId);
             const user = await User.findByPk(userId);
             if (!user) {
                 return next(new ErrorHandler('User not found', 404));

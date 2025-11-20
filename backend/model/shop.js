@@ -66,7 +66,7 @@ const Shop = sequelize.define(
 );
 
 Shop.prototype.getJwtToken = function () {
-  return jwt.sign({ id: this.id }, "B2hFTxy%M#WaHgD6$5Wex2o@b*9J7u");
+  return jwt.sign({ id: this.id }, process.env.JWT_SECRET);
 };
 Shop.prototype.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);

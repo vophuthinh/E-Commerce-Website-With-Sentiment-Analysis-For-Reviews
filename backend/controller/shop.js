@@ -13,8 +13,11 @@ const ErrorHandler = require('../utils/ErrorHandler');
 const sendShopToken = require('../utils/shopToken');
 const bcrypt = require('bcryptjs');
 // create shop
-router.post('/create-shop', upload.single('file'), async (req, res, next) => {
+router.post('/create-shop', upload.single('file'), catchAsyncErrors(async (req, res, next) => {
     try {
+        if (!req.file) {
+            return next(new ErrorHandler('Avatar image is required', 400));
+        }
         const { email } = req.body;
         const sellerEmail = await Shop.findOne({ where: { email } });
         if (sellerEmail) {
@@ -22,24 +25,23 @@ router.post('/create-shop', upload.single('file'), async (req, res, next) => {
             const filePath = `uploads/${filename}`;
             fs.unlink(filePath, (err) => {
                 if (err) {
-                    console.log(err);
-                    res.status(500).json({ message: 'Error deleting file' });
+                    // Log error but don't block response
                 }
             });
             return next(new ErrorHandler('Email đã được sử dụng!', 400));
         }
         const filename = req.file.filename;
         const fileUrl = path.join(filename);
+        // Don't include password in token - it will be sent separately during activation
         const seller = {
             name: req.body.name,
             email: email,
-            password: req.body.password,
             avatar: fileUrl,
             address: req.body.address,
             phoneNumber: req.body.phoneNumber,
         };
         const activationToken = createActivationToken(seller);
-        const activationUrl = `http://localhost:3000/seller/activation/${activationToken}`;
+        const activationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/seller/activation/${activationToken}`;
         try {
             await sendMail({
                 email: seller.email,
@@ -59,7 +61,15 @@ router.post('/create-shop', upload.single('file'), async (req, res, next) => {
 });
 // create activation token
 const createActivationToken = (seller) => {
-    return jwt.sign(seller, 'B2hFTxy%M#WaHgD6$5Wex2o@b*9J7u', {
+    // Only include necessary fields, not password
+    const tokenData = {
+        name: seller.name,
+        email: seller.email,
+        avatar: seller.avatar,
+        address: seller.address,
+        phoneNumber: seller.phoneNumber
+    };
+    return jwt.sign(tokenData, process.env.JWT_SECRET, {
         expiresIn: '5m',
     });
 };
@@ -68,14 +78,18 @@ router.post(
     '/activation',
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const { activation_token } = req.body;
+            const { activation_token, password } = req.body;
 
-            const newSeller = jwt.verify(activation_token, 'B2hFTxy%M#WaHgD6$5Wex2o@b*9J7u');
+            const newSeller = jwt.verify(activation_token, process.env.JWT_SECRET);
 
             if (!newSeller) {
                 return next(new ErrorHandler('Token không hợp lệ', 400));
             }
-            const { name, email, password, avatar, address, phoneNumber } = newSeller;
+            const { name, email, avatar, address, phoneNumber } = newSeller;
+            
+            if (!password) {
+                return next(new ErrorHandler('Vui lòng cung cấp mật khẩu', 400));
+            }
             const hashedPassword = await bcrypt.hash(password, 10);
 
             let seller = await Shop.findOne({ where: { email } });

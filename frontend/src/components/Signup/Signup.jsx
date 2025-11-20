@@ -71,6 +71,18 @@ const Signup = () => {
             .post(`${server}/user/create-user`, newForm, config)
             .then((res) => {
                 toast.success(res.data.message);
+                // Extract activation token from email message if available
+                // Otherwise, save password temporarily for activation page
+                // Note: Password will be cleared after successful activation
+                if (res.data.activationToken || res.data.message?.includes('activation')) {
+                    // Save password temporarily in sessionStorage with email as key
+                    // This will be used when user clicks activation link
+                    sessionStorage.setItem(`temp_password_${email}`, password);
+                    // Set expiration (5 minutes = activation token expiry)
+                    setTimeout(() => {
+                        sessionStorage.removeItem(`temp_password_${email}`);
+                    }, 5 * 60 * 1000);
+                }
                 setName('');
                 setEmail('');
                 setPassword('');

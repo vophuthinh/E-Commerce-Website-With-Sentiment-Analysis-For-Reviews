@@ -35,6 +35,12 @@ const ShopCreate = () => {
             .post(`${server}/shop/create-shop`, newForm, config)
             .then((res) => {
                 toast.success(res.data.message);
+                // Save password temporarily in sessionStorage for activation
+                sessionStorage.setItem(`temp_seller_password_${email}`, password);
+                // Set expiration (5 minutes = activation token expiry)
+                setTimeout(() => {
+                    sessionStorage.removeItem(`temp_seller_password_${email}`);
+                }, 5 * 60 * 1000);
                 setName('');
                 setEmail('');
                 setPassword('');

@@ -16,7 +16,6 @@ router.post(
     upload.array('images'),
     catchAsyncErrors(async (req, res, next) => {
         try {
-            console.log(123);
             const shopId = req.body.shopId;
             const shop = await Shop.findByPk(shopId);
 
@@ -37,9 +36,7 @@ router.post(
                 });
             }
         } catch (error) {
-            return res.json({
-                message: error.message,
-            });
+            return next(new ErrorHandler(error.message, 500));
         }
     }),
 );
@@ -49,7 +46,6 @@ router.put(
     catchAsyncErrors(async (req, res, next) => {
         try {
             const { shopId, productId, ...productData } = req.body;
-            console.log(req.body, 'cc');
             const shop = await Shop.findByPk(shopId);
             const dataProduct = await Product.findOne({ where: { id: productId } });
             if (!dataProduct) {
@@ -81,38 +77,11 @@ router.put(
     }),
 );
 
-// get all products of a shop
-// router.get(
-//   "/get-all-products-shop/:id",
-//   catchAsyncErrors(async (req, res, next) => {
-//     try {
-//       const products = await Product.findAll({
-//         where: { shopId: req.params.id },
-//       });
-//       const updatedProducts = products.map(product => {
-//         const newProduct = product.toJSON();
-//         newProduct.images = JSON.parse(newProduct.images);
-//         newProduct.shop = JSON.parse(newProduct.shop);
-//         newProduct.reviews = JSON.parse(newProduct.reviews);
-//         return newProduct;
-//       });
-
-//       res.status(201).json({
-//         success: true,
-//         products :updatedProducts,
-//       });
-//     } catch (error) {
-//       return next(new ErrorHandler(error, 400));
-//     }
-//   })
-// );
 router.get(
     '/get-all-products-shop/:id',
     catchAsyncErrors(async (req, res, next) => {
         try {
-            // Kiểm tra mô hình trước khi tiếp tục
             while (!(await checkModelStatus())) {
-                console.log('Chờ thêm 10 giây...');
                 await new Promise((resolve) => setTimeout(resolve, 10000));
             }
 
@@ -127,7 +96,6 @@ router.get(
                     newProduct.shop = JSON.parse(newProduct.shop);
                     newProduct.reviews = JSON.parse(newProduct.reviews);
 
-                    // Phân tích cảm xúc cho từng review
                     if (newProduct.reviews && newProduct.reviews.length > 0) {
                         newProduct.reviews = await Promise.all(
                             newProduct.reviews.map(async (review) => {
@@ -137,11 +105,11 @@ router.get(
                                         const dominant = getDominantLabel(sentimentResult);
                                         return {
                                             ...review,
-                                            sentiment: dominant, // Thêm trường cảm xúc vào mỗi review
+                                            sentiment: dominant,
                                         };
                                     }
                                 }
-                                return review; // Nếu không thể phân tích, trả về review gốc
+                                return review;
                             }),
                         );
                     }
@@ -176,7 +144,7 @@ router.delete(
 
                 fs.unlink(filePath, (err) => {
                     if (err) {
-                        console.log(err);
+                        // Error deleting file, continue anyway
                     }
                 });
             });

@@ -92,11 +92,9 @@ router.get(
       })
       const updatedProducts = orders.map(product => {
      
-        const newProduct = product.toJSON(); 
-        console.log( JSON.parse(newProduct.user),'newProduct')
+        const newProduct = product.toJSON();
         newProduct.cart = JSON.parse(newProduct.cart);
         newProduct.shipping_address = JSON.parse(newProduct.shipping_address);
-        // newProduct.shippingAddress = JSON.parse(newProduct.shipping_address);
         newProduct.user = JSON.parse(newProduct.user);
         newProduct.paymentInfo = JSON.parse(newProduct.paymentInfo);
 
@@ -148,7 +146,6 @@ router.put(
         const infoPayment = JSON.parse(order.paymentInfo)
         infoPayment.status = "Succeeded";
         const serviceCharge = order.total_price * 0.1;
-        console.log(123)
         await updateSellerInfo(order.total_price - serviceCharge);
       }
       await order.save({ validateBeforeSave: false });
@@ -163,7 +160,6 @@ router.put(
         await product.save({ validateBeforeSave: false });
       }
       async function updateSellerInfo(amount) {
-        console.log(amount,'seller')
         const seller = await Shop.findByPk(req.seller.id);
         seller.availableBalance = amount;
         await seller.save();
@@ -227,14 +223,12 @@ router.put(
 
       if (req.body.status === "Refund Success") {
         const cartOrder = JSON.parse(order.cart)||'[]'
-        console.log(cartOrder,'cartOrder')
         cartOrder.forEach(async (o) => {
           await updateOrder(o.productId, o.quantity);
         });
       }
       async function updateOrder(id, qty) {
         const product = await Product.findByPk(id);
-        console.log(product,'product')
         product.stock += qty;
         product.sold_out -= qty;
 

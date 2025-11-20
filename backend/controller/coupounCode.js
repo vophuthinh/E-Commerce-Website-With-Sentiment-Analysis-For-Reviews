@@ -15,7 +15,6 @@ router.post(
       const isCoupounCodeExists = await CoupounCode.findOne({
         where: { name: req.body.name },
       });
-      console.log(isCoupounCodeExists,'isCoupounCodeExists')
       if (isCoupounCodeExists) {
         return next(new ErrorHandler("Mã giảm giá đã tồn tại!", 400));
       }
@@ -55,7 +54,7 @@ router.delete(
     try {
       const deletedCoupon = await CoupounCode.destroy({
         where: {
-          id:  req.params.id, // Thay `id` bằng tên cột ID thực tế trong model
+          id:  req.params.id,
         },
       });
       if (!deletedCoupon) {
