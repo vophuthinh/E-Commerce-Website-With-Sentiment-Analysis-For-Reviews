@@ -23,10 +23,10 @@ const UserOrderDetails = () => {
 
     useEffect(() => {
         dispatch(getAllOrdersOfUser(user.id));
-    }, [dispatch,user.id]);
+    }, [dispatch, user.id]);
 
     const data = orders && orders.find((item) => item.id == id);
-    console.log(data,'data?.id')
+    console.log(data, 'data?.id')
 
     const reviewHandler = async (e) => {
         await axios
@@ -92,7 +92,7 @@ const UserOrderDetails = () => {
                 data?.cart.map((item, index) => {
                     return (
                         <div className="w-full flex items-start mb-5">
-                            <img src={`${backend_url}/${item.images[0]}`} alt="" className="w-[80x] h-[80px]" />
+                            <img src={`${backend_url}${item.images[0]}`} alt="" className="w-[80x] h-[80px]" />
                             <div className="w-full">
                                 <h5 className="pl-3 text-[20px]">{item.name}</h5>
                                 <h5 className="pl-3 text-[20px] text-[#00000091]">
@@ -122,7 +122,7 @@ const UserOrderDetails = () => {
                         <br />
                         <div className="w-full flex ">
                             <img
-                                src={`${backend_url}/${selectedItem?.images[0]}`}
+                                src={`${backend_url}${selectedItem?.images[0]}`}
                                 alt=""
                                 className="w-[90px] h-[90px] border-4 border-sky-500 rounded-[8px]"
                             />

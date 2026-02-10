@@ -88,13 +88,13 @@ const Checkout = () => {
         });
     };
 
-    const discountPercentenge = couponCodeData ? discountPrice : '';
+    const discountPercentage = couponCodeData ? discountPrice : '';
 
     const totalPrice = couponCodeData
-        ? (subTotalPrice + shipping - discountPercentenge).toFixed(2)
+        ? (subTotalPrice + shipping - discountPercentage).toFixed(2)
         : (subTotalPrice + shipping).toFixed(2);
 
-    console.log(discountPercentenge);
+    console.log(discountPercentage);
 
     return (
         <div className="w-full flex flex-col items-center py-8">
@@ -112,8 +112,8 @@ const Checkout = () => {
                         setAddress1={setAddress1}
                         // address2={address2}
                         setAddress2={setAddress2}
-                        // zipCode={zipCode}
-                        // setZipCode={setZipCode}
+                    // zipCode={zipCode}
+                    // setZipCode={setZipCode}
                     />
                 </div>
                 <div className="w-full 800px:w-[35%] 800px:mt-0 mt-8">
@@ -124,7 +124,7 @@ const Checkout = () => {
                         subTotalPrice={subTotalPrice}
                         couponCode={couponCode}
                         setCouponCode={setCouponCode}
-                        discountPercentenge={discountPercentenge}
+                        discountPercentage={discountPercentage}
                     />
                 </div>
             </div>
@@ -310,7 +310,7 @@ const CartData = ({
     subTotalPrice,
     couponCode,
     setCouponCode,
-    discountPercentenge,
+    discountPercentage,
 }) => {
     return (
         <div className="w-full bg-[#fff] rounded-md p-5 pb-8">
@@ -328,8 +328,8 @@ const CartData = ({
                 <h3 className="text-[16px] font-[400] text-[#000000a4]">Voucher:</h3>
                 <h5 className="text-[18px] font-[600]">
                     -
-                    {discountPercentenge
-                        ? '' + `${currency.format(discountPercentenge.toString(), { code: 'VND' })}`
+                    {discountPercentage
+                        ? '' + `${currency.format(discountPercentage.toString(), { code: 'VND' })}`
                         : null}
                 </h5>
             </div>

@@ -36,7 +36,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 app.use(helmet());
 
 // Data sanitization against NoSQL query injection
-app.use(mongoSanitize());
+// app.use(mongoSanitize());
 
 // Static files
 app.use("/", express.static(path.join(__dirname, "./uploads")));
@@ -62,7 +62,6 @@ const order = require("./controller/order");
 const conversation = require("./controller/conversation");
 const message = require("./controller/message");
 const withdraw = require("./controller/withdraw");
-const User = require("./model/user");
 
 app.use("/api/v2/user", user);
 app.use("/api/v2/conversation", conversation);
@@ -74,42 +73,7 @@ app.use("/api/v2/event", event);
 app.use("/api/v2/coupon", coupon);
 app.use("/api/v2/payment", payment);
 app.use("/api/v2/withdraw", withdraw);
-// Update user role - Protected route (Admin only)
-app.put(
-  "/api/v2/user/update-role/:id",
-  require("./middleware/auth").isAuthenticated,
-  require("./middleware/auth").isAdmin("Admin"),
-  require("./middleware/catchAsyncErrors")(async (req, res, next) => {
-    try {
-      const user = await User.findByPk(req.params.id);
-      if (!user) {
-        return next(new require("./utils/ErrorHandler")("User not found", 404));
-      }
-      const { role } = req.body;
-      
-      if (!role) {
-        return next(new require("./utils/ErrorHandler")("Role is required", 400));
-      }
-      
-      // Validate role value
-      const validRoles = ["user", "Admin", "Seller"];
-      if (!validRoles.includes(role)) {
-        return next(new require("./utils/ErrorHandler")("Invalid role", 400));
-      }
-      
-      user.role = role;
-      await user.save();
-      
-      return res.status(200).json({
-        success: true,
-        message: "Role updated successfully",
-        user,
-      });
-    } catch (error) {
-      return next(new require("./utils/ErrorHandler")(error.message, 500));
-    }
-  })
-);
+
 
 app.use(ErrorHandler);
 module.exports = app;

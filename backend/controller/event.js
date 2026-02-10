@@ -147,17 +147,27 @@ router.delete(
       const productId = req.params.id;
 
       const eventData = await Event.findByPk(productId);
-      const ImageEvent = JSON.parse(eventData.images);
-      ImageEvent.forEach((imageUrl) => {
-        const filename = imageUrl;
-        const filePath = `uploads/${filename}`;
+      let ImageEvent = eventData.images;
+      if (typeof ImageEvent === 'string') {
+        try {
+          ImageEvent = JSON.parse(ImageEvent);
+        } catch (e) {
+          ImageEvent = [];
+        }
+      }
 
-        fs.unlink(filePath, (err) => {
-          if (err) {
-            // Error deleting file, continue anyway
-          }
+      if (Array.isArray(ImageEvent)) {
+        ImageEvent.forEach((imageUrl) => {
+          const filename = imageUrl;
+          const filePath = `uploads/${filename}`;
+
+          fs.unlink(filePath, (err) => {
+            if (err) {
+              // Error deleting file, continue anyway
+            }
+          });
         });
-      });
+      }
 
       const event = await eventData.destroy();
 

@@ -38,7 +38,14 @@ export const productReducer = createReducer(initialState, {
   },
   deleteProductSuccess: (state, action) => {
     state.isLoading = false;
-    state.message = action.payload;
+    state.message = action.payload.message;
+    // Remove from state arrays if they exist
+    if (state.products) {
+      state.products = state.products.filter((i) => i.id !== action.payload.id);
+    }
+    if (state.allProducts) {
+      state.allProducts = state.allProducts.filter((i) => i.id !== action.payload.id);
+    }
   },
   deleteProductFailed: (state, action) => {
     state.isLoading = false;
@@ -57,7 +64,7 @@ export const productReducer = createReducer(initialState, {
     state.isLoading = false;
     state.error = action.payload;
   },
-  
+
   clearErrors: (state) => {
     state.error = null;
   },

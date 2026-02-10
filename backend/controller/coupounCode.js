@@ -35,7 +35,7 @@ router.get(
   isSeller,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const couponCodes = await CoupounCode.findAll({ where:{shopId: req.seller.id} });
+      const couponCodes = await CoupounCode.findAll({ where: { shopId: req.seller.id } });
       res.status(201).json({
         success: true,
         couponCodes,
@@ -54,7 +54,8 @@ router.delete(
     try {
       const deletedCoupon = await CoupounCode.destroy({
         where: {
-          id:  req.params.id,
+          id: req.params.id,
+          shopId: req.seller.id,
         },
       });
       if (!deletedCoupon) {
@@ -75,7 +76,7 @@ router.get(
   "/get-coupon-value/:name",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const couponCode = await CoupounCode.findOne({ where:{name: req.params.name} });
+      const couponCode = await CoupounCode.findOne({ where: { name: req.params.name } });
       res.status(200).json({
         success: true,
         couponCode,

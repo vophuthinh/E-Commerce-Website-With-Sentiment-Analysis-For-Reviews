@@ -11,22 +11,15 @@ export const cartReducer = createReducer(initialState, {
     const item = action.payload;
     const isItemExist = state.cart.find((i) => i.id === item.id);
     if (isItemExist) {
-      return {
-        ...state,
-        cart: state.cart.map((i) => (i.id === isItemExist.id ? item : i)),
-      };
+      // Immer allows direct mutation
+      const index = state.cart.findIndex((i) => i.id === isItemExist.id);
+      state.cart[index] = item;
     } else {
-      return {
-        ...state,
-        cart: [...state.cart, item],
-      };
+      state.cart.push(item);
     }
   },
 
   removeFromCart: (state, action) => {
-    return {
-      ...state,
-      cart: state.cart.filter((i) => i.id !== action.payload),
-    };
+    state.cart = state.cart.filter((i) => i.id !== action.payload);
   },
 });

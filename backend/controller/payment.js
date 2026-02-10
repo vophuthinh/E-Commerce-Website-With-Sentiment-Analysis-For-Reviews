@@ -9,7 +9,7 @@ router.post(
     catchAsyncErrors(async (req, res, next) => {
         const myPayment = await stripe.paymentIntents.create({
             amount: req.body.amount,
-            currency: 'inr',
+            currency: req.body.currency || 'vnd',
             metadata: {
                 company: 'Becodemy',
             },

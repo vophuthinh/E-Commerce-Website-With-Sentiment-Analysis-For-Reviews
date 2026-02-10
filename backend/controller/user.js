@@ -19,7 +19,7 @@ router.post('/create-user', upload.single('file'), catchAsyncErrors(async (req, 
             return next(new ErrorHandler('Avatar image is required', 400));
         }
         const { name, email, password } = req.body;
-        
+
         // Basic validation
         if (!name || !email || !password) {
             if (req.file) {
@@ -32,7 +32,7 @@ router.post('/create-user', upload.single('file'), catchAsyncErrors(async (req, 
             }
             return next(new ErrorHandler('Please provide all required fields', 400));
         }
-        
+
         const userEmail = await User.findOne({ where: { email } });
 
         if (userEmail) {
@@ -99,7 +99,7 @@ router.post(
                 return next(new ErrorHandler('Token không hợp lệ', 400));
             }
             const { name, email, avatar } = newUser;
-            
+
             if (!password) {
                 return next(new ErrorHandler('Vui lòng cung cấp mật khẩu', 400));
             }
@@ -255,7 +255,15 @@ router.put(
             if (!user) {
                 return next(new ErrorHandler('User not found', 404));
             }
-            const newAdd = JSON.parse(user.addresses || '[]');
+
+            let newAdd = user.addresses || [];
+            if (typeof newAdd === 'string') {
+                try {
+                    newAdd = JSON.parse(newAdd);
+                } catch (e) {
+                    newAdd = [];
+                }
+            }
             const sameTypeAddress = newAdd.find((address) => address.addressType === req.body.addressType);
             if (sameTypeAddress) {
                 return next(new ErrorHandler(`${req.body.addressType} địa chỉ đã tồn tại!`));
@@ -294,7 +302,15 @@ router.delete(
             if (!user) {
                 return next(new ErrorHandler('User not found', 404));
             }
-            const addresses = user.addresses ? JSON.parse(user.addresses) : [];
+
+            let addresses = user.addresses || [];
+            if (typeof addresses === 'string') {
+                try {
+                    addresses = JSON.parse(addresses);
+                } catch (e) {
+                    addresses = [];
+                }
+            }
             const updatedAddresses = addresses.filter((_, index) => index != addressId);
             if (updatedAddresses.length === 0) {
                 user.addresses = null;
@@ -388,6 +404,43 @@ router.delete(
             res.status(201).json({
                 success: true,
                 message: 'Xóa người dùng thành công!',
+            });
+        } catch (error) {
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }),
+);
+
+// update user role --- admin
+router.put(
+    '/update-role/:id',
+    isAuthenticated,
+    isAdmin('Admin'),
+    catchAsyncErrors(async (req, res, next) => {
+        try {
+            const user = await User.findByPk(req.params.id);
+            if (!user) {
+                return next(new ErrorHandler('User not found', 404));
+            }
+            const { role } = req.body;
+
+            if (!role) {
+                return next(new ErrorHandler('Role is required', 400));
+            }
+
+            // Validate role value
+            const validRoles = ['user', 'Admin', 'Seller'];
+            if (!validRoles.includes(role)) {
+                return next(new ErrorHandler('Invalid role', 400));
+            }
+
+            user.role = role;
+            await user.save();
+
+            res.status(200).json({
+                success: true,
+                message: 'Role updated successfully',
+                user,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));

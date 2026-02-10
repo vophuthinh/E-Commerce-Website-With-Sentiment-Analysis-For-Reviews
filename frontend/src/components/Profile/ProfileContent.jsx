@@ -8,7 +8,7 @@ import { Button } from '@material-ui/core';
 import { Link } from 'react-router-dom';
 import { MdTrackChanges } from 'react-icons/md';
 import { RxCross1 } from 'react-icons/rx';
-import { deleteUserAddress, loadUser, updatUserAddress, updateUserInformation } from '../../redux/actions/user';
+import { deleteUserAddress, loadUser, updateUserAddress, updateUserInformation } from '../../redux/actions/user';
 import { Country, State } from 'country-state-city';
 import { useEffect } from 'react';
 import { toast } from 'react-toastify';
@@ -265,7 +265,7 @@ const AllOrders = () => {
 
 const AllRefundOrders = () => {
     const { user } = useSelector((state) => state.user);
-    
+
     const { orders } = useSelector((state) => state.order);
     const dispatch = useDispatch();
 
@@ -274,7 +274,7 @@ const AllRefundOrders = () => {
     }, []);
 
     const eligibleOrders = orders && orders.filter((item) => item.status === 'Processing Refund');
-   
+
     const columns = [
         { field: 'id', headerName: 'ID', minWidth: 150, flex: 0.7 },
 
@@ -523,7 +523,7 @@ const Address = () => {
             toast.error('Please fill in all fields!');
         } else {
             dispatch(
-                updatUserAddress(
+                updateUserAddress(
                     country,
                     city,
                     address1,

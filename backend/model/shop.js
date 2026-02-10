@@ -47,6 +47,9 @@ const Shop = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
     },
+    transections: {
+      type: DataTypes.JSON,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

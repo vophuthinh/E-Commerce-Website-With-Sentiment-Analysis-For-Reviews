@@ -12,7 +12,7 @@ import { TfiGallery } from "react-icons/tfi";
 import styles from "../styles/styles";
 import useSocket, { socket } from "./useSocket";
 
-const ENDPOINT = "https://socket-ecommerce-tu68.onrender.com/";
+const ENDPOINT = "http://localhost:4000"; // TODO: use process.env.REACT_APP_SOCKET_URL
 const socketId = socketIO(ENDPOINT, { transports: ["websocket"] });
 
 const UserInbox = () => {
@@ -68,7 +68,7 @@ const UserInbox = () => {
   };
   useEffect(() => {
     getConversation();
-  }, [user, messages,user?.id,currentChat]);
+  }, [user, messages, user?.id, currentChat]);
 
   useEffect(() => {
     if (user) {
@@ -105,8 +105,8 @@ const UserInbox = () => {
   useEffect(() => {
     socket.connect();
     socket.on("newMsg", (data) => {
-        getConversation();
-        getMessage();
+      getConversation();
+      getMessage();
     });
     return () => {
       socket.off("newMsg");
@@ -184,12 +184,6 @@ const UserInbox = () => {
 
     const receiverId = currentChat.members.find((member) => member != user.id);
 
-    socketId.emit("sendMessage", {
-      senderId: user.id,
-      receiverId,
-      images: e,
-    });
-
     try {
       await axios
         .post(`${server}/message/create-new-message`, formData, {
@@ -201,6 +195,12 @@ const UserInbox = () => {
           setImages();
           setMessages([...messages, res.data.message]);
           updateLastMessageForImage();
+
+          socketId.emit("sendMessage", {
+            senderId: user.id,
+            receiverId,
+            images: res.data.message.images,
+          });
         });
     } catch (error) {
       console.log(error);
@@ -346,17 +346,15 @@ const MessageList = ({
 
   return (
     <div
-      className={`w-full flex p-3 px-3 border-b-2 border-slate-400 rounded-md ${
-        active === index ? "bg-[#30303005]" : "bg-transparent"
-      }  cursor-pointer`}
-      onClick={(e) =>
-      {
-        
+      className={`w-full flex p-3 px-3 border-b-2 border-slate-400 rounded-md ${active === index ? "bg-[#30303005]" : "bg-transparent"
+        }  cursor-pointer`}
+      onClick={(e) => {
+
         setActive(index) ||
-        handleClick(data.id) ||
-        setCurrentChat(data) ||
-        setUserData(user) ||
-        setActiveStatus(online)
+          handleClick(data.id) ||
+          setCurrentChat(data) ||
+          setUserData(user) ||
+          setActiveStatus(online)
       }
       }
     >
@@ -424,9 +422,8 @@ const SellerInbox = ({
         {messages &&
           messages.map((item, index) => (
             <div
-              className={`flex w-full my-2 ${
-                item.sender == sellerId ? "justify-end" : "justify-start"
-              }`}
+              className={`flex w-full my-2 ${item.sender == sellerId ? "justify-end" : "justify-start"
+                }`}
               ref={scrollRef}
             >
               {item.sender != sellerId && (
@@ -445,9 +442,8 @@ const SellerInbox = ({
               {item.text != "" && (
                 <div>
                   <div
-                    className={`w-max p-2 rounded-[12px] ${
-                      item.sender === sellerId ? "bg-[#0b2a52]" : "bg-[#38c776]"
-                    } text-[#fff] h-min`}
+                    className={`w-max p-2 rounded-[12px] ${item.sender === sellerId ? "bg-[#0b2a52]" : "bg-[#38c776]"
+                      } text-[#fff] h-min`}
                   >
                     <p>{item.text}</p>
                   </div>

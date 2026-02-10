@@ -84,9 +84,8 @@ const ProductDetails = ({ data }) => {
                         <div className="lg:w-1/2">
                             <div className="flex flex-col items-center">
                                 <img
-                                    src={`${backend_url}${
-                                        Array.isArray(data.images) ? data.images[select] : data.images
-                                    }`}
+                                    src={`${backend_url}${Array.isArray(data.images) ? data.images[select] : data.images
+                                        }`}
                                     alt="Product"
                                     className="w-3/4 rounded-lg shadow-lg cursor-pointer"
                                     onClick={openModal}
@@ -95,28 +94,26 @@ const ProductDetails = ({ data }) => {
                                 <div className="flex mt-4 space-x-2">
                                     {Array.isArray(data.images)
                                         ? data.images.map((img, index) => (
-                                              <img
-                                                  key={index}
-                                                  src={`${backend_url}${img}`}
-                                                  onClick={() => setSelect(index)}
-                                                  alt=""
-                                                  className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-transform duration-300 ${
-                                                      select === index ? 'ring-2 ring-orange-500 scale-105' : ''
-                                                  }`}
-                                              />
-                                          ))
+                                            <img
+                                                key={index}
+                                                src={`${backend_url}${img}`}
+                                                onClick={() => setSelect(index)}
+                                                alt=""
+                                                className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-transform duration-300 ${select === index ? 'ring-2 ring-orange-500 scale-105' : ''
+                                                    }`}
+                                            />
+                                        ))
                                         : // Nếu data.images không phải là mảng, chuyển nó thành mảng
-                                          [data.images].map((img, index) => (
-                                              <img
-                                                  key={index}
-                                                  src={`${backend_url}${img}`}
-                                                  onClick={() => setSelect(index)}
-                                                  alt=""
-                                                  className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-transform duration-300 ${
-                                                      select === index ? 'ring-2 ring-orange-500 scale-105' : ''
-                                                  }`}
-                                              />
-                                          ))}
+                                        [data.images].map((img, index) => (
+                                            <img
+                                                key={index}
+                                                src={`${backend_url}${img}`}
+                                                onClick={() => setSelect(index)}
+                                                alt=""
+                                                className={`w-16 h-16 object-cover rounded-lg cursor-pointer transition-transform duration-300 ${select === index ? 'ring-2 ring-orange-500 scale-105' : ''
+                                                    }`}
+                                            />
+                                        ))}
                                 </div>
                             </div>
                         </div>
@@ -226,9 +223,8 @@ const ProductDetails = ({ data }) => {
                         >
                             <div className="relative">
                                 <img
-                                    src={`${backend_url}${
-                                        Array.isArray(data.images) ? data.images[select] : data.images
-                                    }`}
+                                    src={`${backend_url}${Array.isArray(data.images) ? data.images[select] : data.images
+                                        }`}
                                     alt="Enlarged Product"
                                     className="max-w-full max-h-full rounded-lg"
                                 />
@@ -275,9 +271,8 @@ const ProductDetailsInfo = ({ data, products, totalReviewsLength, averageRating 
                     <button
                         key={index}
                         onClick={() => setActiveTab(index + 1)}
-                        className={`pb-2 ${
-                            activeTab === index + 1 ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-600'
-                        }`}
+                        className={`pb-2 ${activeTab === index + 1 ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-600'
+                            }`}
                     >
                         {tab}
                     </button>
@@ -301,6 +296,35 @@ const ProductDetailsInfo = ({ data, products, totalReviewsLength, averageRating 
                                 <div>
                                     <h3 className="font-medium text-lg">{review.user.name}</h3>
                                     <Ratings rating={review.rating} />
+                                    <div className="pl-2 m-2">
+                                        {review.sentiment ? (
+                                            <div>
+                                                <div className={`px-2 py-1 rounded-full text-xs font-semibold w-fit
+                                                    ${review.sentiment.label === 'POS' ? 'bg-green-100 text-green-800' :
+                                                        review.sentiment.label === 'NEG' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                    {review.sentiment.label === 'POS' ? 'Tích cực' :
+                                                        review.sentiment.label === 'NEG' ? 'Tiêu cực' : 'Trung tính'}
+                                                    <span className="ml-1 text-[10px] opacity-75">
+                                                        ({(review.sentiment.score * 100).toFixed(0)}%)
+                                                    </span>
+                                                </div>
+
+                                                {/* Display Aspects */}
+                                                {review.sentiment.aspects && review.sentiment.aspects.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {review.sentiment.aspects.map((aspect, idx) => (
+                                                            <span key={idx} className={`px-2 py-0.5 rounded textxs font-medium border ${aspect.label.includes('tốt') || aspect.label.includes('nhanh') || aspect.label.includes('rẻ')
+                                                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                                : 'bg-orange-50 text-orange-700 border-orange-200'
+                                                                }`}>
+                                                                {aspect.label}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : null}
+                                    </div>
                                     <p className="text-gray-700">{review.comment}</p>
                                 </div>
                             </div>

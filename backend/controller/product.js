@@ -8,7 +8,8 @@ const Shop = require('../model/shop');
 const { upload } = require('../multer');
 const ErrorHandler = require('../utils/ErrorHandler');
 const fs = require('fs');
-const { analyzeSentiment, checkModelStatus, getDominantLabel } = require('./analyzeSentiment');
+const { analyzeSentiment, checkModelStatus, getDominantLabel, analyzeAspects } = require('./analyzeSentiment');
+const safeJSONParse = require('../utils/safeJSONParse');
 
 // create product
 router.post(
@@ -77,53 +78,30 @@ router.put(
     }),
 );
 
+// get all products of a shop
 router.get(
     '/get-all-products-shop/:id',
     catchAsyncErrors(async (req, res, next) => {
         try {
-            while (!(await checkModelStatus())) {
-                await new Promise((resolve) => setTimeout(resolve, 10000));
-            }
-
             const products = await Product.findAll({
                 where: { shopId: req.params.id },
             });
 
-            const updatedProducts = await Promise.all(
-                products.map(async (product) => {
-                    const newProduct = product.toJSON();
-                    newProduct.images = JSON.parse(newProduct.images);
-                    newProduct.shop = JSON.parse(newProduct.shop);
-                    newProduct.reviews = JSON.parse(newProduct.reviews);
+            // Parse JSON fields safely
+            const updatedProducts = products.map((product) => {
+                const newProduct = product.toJSON();
+                newProduct.images = safeJSONParse(newProduct.images, []);
+                newProduct.shop = safeJSONParse(newProduct.shop, {});
+                newProduct.reviews = safeJSONParse(newProduct.reviews, []);
+                return newProduct;
+            });
 
-                    if (newProduct.reviews && newProduct.reviews.length > 0) {
-                        newProduct.reviews = await Promise.all(
-                            newProduct.reviews.map(async (review) => {
-                                if (review.comment) {
-                                    const sentimentResult = await analyzeSentiment(review.comment);
-                                    if (sentimentResult) {
-                                        const dominant = getDominantLabel(sentimentResult);
-                                        return {
-                                            ...review,
-                                            sentiment: dominant,
-                                        };
-                                    }
-                                }
-                                return review;
-                            }),
-                        );
-                    }
-
-                    return newProduct;
-                }),
-            );
-
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 products: updatedProducts,
             });
         } catch (error) {
-            return next(new ErrorHandler(error, 400));
+            return next(new ErrorHandler(error.message, 500));
         }
     }),
 );
@@ -137,7 +115,10 @@ router.delete(
             const productId = req.params.id;
 
             const productData = await Product.findByPk(productId);
-            const imageArr = JSON.parse(productData.images);
+            let imageArr = productData.images;
+            if (typeof imageArr === 'string') {
+                imageArr = JSON.parse(imageArr);
+            }
             imageArr.forEach((imageUrl) => {
                 const filename = imageUrl;
                 const filePath = `uploads/${filename}`;
@@ -170,9 +151,9 @@ router.get(
             const products = await Product.findAll({});
             const updatedProducts = products.map((product) => {
                 const newProduct = product.toJSON();
-                newProduct.images = JSON.parse(newProduct.images);
-                newProduct.shop = JSON.parse(newProduct.shop);
-                newProduct.reviews = JSON.parse(newProduct.reviews);
+                newProduct.images = safeJSONParse(newProduct.images, []);
+                newProduct.shop = safeJSONParse(newProduct.shop, {});
+                newProduct.reviews = safeJSONParse(newProduct.reviews, []);
                 return newProduct;
             });
             res.status(201).json({
@@ -201,15 +182,61 @@ router.put(
                 return next(new ErrorHandler('Sản phẩm không tồn tại!', 404));
             }
 
+            // Perform Sentiment Analysis HERE
+            let sentimentData = null;
+            if (comment) {
+                // Check if model is ready (optional, or just try to analyze)
+                const isModelReady = await checkModelStatus();
+                if (isModelReady) {
+                    if (isModelReady) {
+                        const sentimentResult = await analyzeSentiment(comment);
+                        const aspectResult = await analyzeAspects(comment);
+
+                        if (sentimentResult) {
+                            sentimentData = getDominantLabel(sentimentResult);
+                            if (sentimentData && aspectResult.length > 0) {
+                                sentimentData.aspects = aspectResult;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Verify if user actually purchased and received the product
+            const orders = await Order.findAll({
+                where: {
+                    'user.id': req.user.id,
+                    status: 'Delivered'
+                }
+            });
+
+            let isPurchased = false;
+            for (const order of orders) {
+                let cartItems = safeJSONParse(order.cart, []);
+                if (Array.isArray(cartItems)) {
+                    const found = cartItems.find(item => item.id === productId || item._id === productId); // Check both id formats just in case
+                    if (found) {
+                        isPurchased = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!isPurchased) {
+                return next(new ErrorHandler('Bạn chỉ có thể đánh giá sản phẩm đã mua và đã nhận hàng!', 400));
+            }
+
             const review = {
                 user,
                 rating,
                 comment,
                 productId,
                 date: new Date(),
+                sentiment: sentimentData, // Store the result!
             };
 
-            const dataReview = product?.reviews ? JSON.parse(product.reviews) : [];
+            const dataReview = product.reviews ? safeJSONParse(product.reviews, []) : [];
+
             const isReviewed = dataReview.find((rev) => rev.user.id == req.user.id);
 
             if (isReviewed) {
@@ -219,6 +246,7 @@ router.put(
                         rev.comment = comment;
                         rev.user = user;
                         rev.date = new Date();
+                        rev.sentiment = sentimentData; // Update sentiment
                     }
                 });
             } else {
@@ -231,12 +259,23 @@ router.put(
             });
 
             product.ratings = avg / dataReview.length;
+
+            // Note: Sequelize updates JSON fields by reassigning
             product.reviews = dataReview;
-            await product.save({ validateBeforeSave: false });
+
+            // We need to explicitly tell Sequelize that this field has changed if using JSON datatype in some versions, 
+            // but reassigning usually works.
+
+            await Product.update(
+                {
+                    reviews: dataReview,
+                    ratings: avg / dataReview.length
+                },
+                { where: { id: productId } }
+            );
 
             res.status(200).json({
                 success: true,
-                product,
                 message: 'Đánh giá thành công!',
             });
         } catch (error) {

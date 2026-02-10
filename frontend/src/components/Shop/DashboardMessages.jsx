@@ -12,7 +12,7 @@ import { format } from 'timeago.js';
 import { socket } from '../../pages/useSocket';
 import { useLocation } from "react-router-dom";
 
-const ENDPOINT = 'https://socket-ecommerce-tu68.onrender.com/';
+const ENDPOINT = "http://localhost:4000"; // TODO: use process.env.REACT_APP_SOCKET_URL
 const socketId = socketIO(ENDPOINT, { transports: ['websocket'] });
 
 const DashboardMessages = () => {
@@ -55,14 +55,14 @@ const DashboardMessages = () => {
             });
 
             setConversations(resonse.data.conversations);
-            
+
         } catch (error) {
             // console.log(error);
         }
     };
     useEffect(() => {
         getConversation();
-    }, [seller, messages,seller?.id,currentChat]);
+    }, [seller, messages, seller?.id, currentChat]);
 
     useEffect(() => {
         if (seller) {
@@ -166,12 +166,6 @@ const DashboardMessages = () => {
 
         const receiverId = currentChat.members.find((member) => member != seller.id);
 
-        socketId.emit('sendMessage', {
-            senderId: seller.id,
-            receiverId,
-            images: e,
-        });
-
         try {
             await axios
                 .post(`${server}/message/create-new-message`, formData, {
@@ -183,6 +177,12 @@ const DashboardMessages = () => {
                     setImages();
                     setMessages([...messages, res.data.message]);
                     updateLastMessageForImage();
+
+                    socketId.emit('sendMessage', {
+                        senderId: seller.id,
+                        receiverId,
+                        images: res.data.message.images,
+                    });
                 });
         } catch (error) {
             console.log(error);
@@ -198,14 +198,14 @@ const DashboardMessages = () => {
     useEffect(() => {
         socket.connect();
         socket.on("newMsg", (data) => {
-        getConversation();
+            getConversation();
             getMessage();
         });
         return () => {
-          socket.off("newMsg");
-          socket.disconnect();
+            socket.off("newMsg");
+            socket.disconnect();
         };
-      }, []);
+    }, []);
     useEffect(() => {
         scrollRef.current?.scrollIntoView({ beahaviour: 'smooth' });
     }, [messages]);
@@ -254,7 +254,7 @@ const DashboardMessages = () => {
 };
 
 const MessageList = ({ data, index, setOpen, setCurrentChat, me, setUserData, online, setActiveStatus }) => {
-    console.log(data,'datadata');
+    console.log(data, 'datadata');
     const [user, setUser] = useState([]);
     const navigate = useNavigate();
     const handleClick = (id) => {
@@ -280,14 +280,13 @@ const MessageList = ({ data, index, setOpen, setCurrentChat, me, setUserData, on
     return (
         <div
             className={`w-full flex p-3 px-3 ${active === index ? 'bg-[#00000010]' : 'bg-transparent'}  cursor-pointer`}
-            onClick={(e) =>
-               {
+            onClick={(e) => {
                 setActive(index) ||
-                handleClick(data.id) ||
-                setCurrentChat(data) ||
-                setUserData(user) ||
-                setActiveStatus(online)
-               }
+                    handleClick(data.id) ||
+                    setCurrentChat(data) ||
+                    setUserData(user) ||
+                    setActiveStatus(online)
+            }
             }
         >
             <div className="relative">
@@ -340,9 +339,8 @@ const SellerInbox = ({
                     messages.map((item, index) => {
                         return (
                             <div
-                                className={`flex w-full my-2 ${
-                                    item.sender == sellerId ? 'justify-end' : 'justify-start'
-                                }`}
+                                className={`flex w-full my-2 ${item.sender == sellerId ? 'justify-end' : 'justify-start'
+                                    }`}
                                 ref={scrollRef}
                             >
                                 {item.sender != sellerId && (
@@ -361,9 +359,8 @@ const SellerInbox = ({
                                 {item.text != '' && (
                                     <div>
                                         <div
-                                            className={`w-max p-2 rounded ${
-                                                item.sender === sellerId ? 'bg-[#000]' : 'bg-[#38c776]'
-                                            } text-[#fff] h-min`}
+                                            className={`w-max p-2 rounded ${item.sender === sellerId ? 'bg-[#000]' : 'bg-[#38c776]'
+                                                } text-[#fff] h-min`}
                                         >
                                             <p>{item.text}</p>
                                         </div>

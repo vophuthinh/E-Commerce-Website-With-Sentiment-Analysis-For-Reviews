@@ -52,43 +52,14 @@ io.on("connection", (socket) => {
   });
 
   // send and get message
-  const messages = {}; // Object to track messages sent to each user
-
   socket.on("sendMessage", ({ senderId, receiverId, text, images }) => {
     const message = createMessage({ senderId, receiverId, text, images });
 
     const user = getUser(receiverId);
 
-    // Store the messages in the `messages` object
-    if (!messages[receiverId]) {
-      messages[receiverId] = [message];
-    } else {
-      messages[receiverId].push(message);
-    }
-
     // send the message to the recevier
-    io.to(user?.socketId).emit("getMessage", message);
-  });
-
-  socket.on("messageSeen", ({ senderId, receiverId, messageId }) => {
-    const user = getUser(senderId);
-
-    // update the seen flag for the message
-    if (messages[senderId]) {
-      const message = messages[senderId].find(
-        (message) =>
-          message.receiverId === receiverId && message.id === messageId
-      );
-      if (message) {
-        message.seen = true;
-
-        // send a message seen event to the sender
-        io.to(user?.socketId).emit("messageSeen", {
-          senderId,
-          receiverId,
-          messageId,
-        });
-      }
+    if (user?.socketId) {
+      io.to(user.socketId).emit("getMessage", message);
     }
   });
 

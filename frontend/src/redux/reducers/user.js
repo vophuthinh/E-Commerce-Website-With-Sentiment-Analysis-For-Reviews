@@ -34,29 +34,29 @@ export const userReducer = createReducer(initialState, {
 
   // update user address
   updateUserAddressRequest: (state) => {
-    state.addressloading = true;
+    state.addressLoading = true;
   },
   updateUserAddressSuccess: (state, action) => {
-    state.addressloading = false;
+    state.addressLoading = false;
     state.successMessage = action.payload.successMessage;
     state.user = action.payload.user;
   },
   updateUserAddressFailed: (state, action) => {
-    state.addressloading = false;
+    state.addressLoading = false;
     state.error = action.payload;
   },
 
   // delete user address
   deleteUserAddressRequest: (state) => {
-    state.addressloading = true;
+    state.addressLoading = true;
   },
   deleteUserAddressSuccess: (state, action) => {
-    state.addressloading = false;
+    state.addressLoading = false;
     state.successMessage = action.payload.successMessage;
     state.user = action.payload.user;
   },
   deleteUserAddressFailed: (state, action) => {
-    state.addressloading = false;
+    state.addressLoading = false;
     state.error = action.payload;
   },
 
@@ -64,11 +64,11 @@ export const userReducer = createReducer(initialState, {
   getAllUsersRequest: (state) => {
     state.usersLoading = true;
   },
-  getAllUsersSuccess: (state,action) => {
+  getAllUsersSuccess: (state, action) => {
     state.usersLoading = false;
     state.users = action.payload;
   },
-  getAllUsersFailed: (state,action) => {
+  getAllUsersFailed: (state, action) => {
     state.usersLoading = false;
     state.error = action.payload;
   },

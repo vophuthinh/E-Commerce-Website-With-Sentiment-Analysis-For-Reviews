@@ -12,6 +12,9 @@ const catchAsyncErrors = require('../middleware/catchAsyncErrors');
 const ErrorHandler = require('../utils/ErrorHandler');
 const sendShopToken = require('../utils/shopToken');
 const bcrypt = require('bcryptjs');
+const Product = require("../model/product");
+const Event = require("../model/event");
+const CoupounCode = require("../model/coupounCode");
 // create shop
 router.post('/create-shop', upload.single('file'), catchAsyncErrors(async (req, res, next) => {
     try {
@@ -58,7 +61,7 @@ router.post('/create-shop', upload.single('file'), catchAsyncErrors(async (req, 
     } catch (error) {
         return next(new ErrorHandler(error.message, 400));
     }
-});
+}));
 // create activation token
 const createActivationToken = (seller) => {
     // Only include necessary fields, not password
@@ -86,7 +89,7 @@ router.post(
                 return next(new ErrorHandler('Token không hợp lệ', 400));
             }
             const { name, email, avatar, address, phoneNumber } = newSeller;
-            
+
             if (!password) {
                 return next(new ErrorHandler('Vui lòng cung cấp mật khẩu', 400));
             }
@@ -147,9 +150,19 @@ router.get(
             if (!seller) {
                 return next(new ErrorHandler('Cửa hàng này không tồn tại!', 400));
             }
+
+            let withdrawMethod = seller.withdrawMethod;
+            if (typeof withdrawMethod === 'string') {
+                try {
+                    withdrawMethod = JSON.parse(withdrawMethod);
+                } catch (e) {
+                    withdrawMethod = null;
+                }
+            }
+
             const newData = {
                 ...seller.toJSON(),
-                withdrawMethod: JSON.parse(seller.withdrawMethod),
+                withdrawMethod,
             };
             return res.status(200).json({
                 success: true,
@@ -203,21 +216,26 @@ router.put(
     upload.single('image'),
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const existsUser = await Shop.findById(req.seller.id);
+            const existsUser = await Shop.findByPk(req.seller.id);
+
+            if (!existsUser) {
+                return next(new ErrorHandler("Shop not found", 400));
+            }
 
             const existAvatarPath = `uploads/${existsUser.avatar}`;
 
-            fs.unlinkSync(existAvatarPath);
+            if (fs.existsSync(existAvatarPath)) {
+                fs.unlinkSync(existAvatarPath);
+            }
 
             const fileUrl = path.join(req.file.filename);
 
-            const seller = await Shop.findByIdAndUpdate(req.seller.id, {
-                avatar: fileUrl,
-            });
+            existsUser.avatar = fileUrl;
+            await existsUser.save();
 
             res.status(200).json({
                 success: true,
-                seller,
+                seller: existsUser,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -286,6 +304,15 @@ router.delete(
             if (!seller) {
                 return next(new ErrorHandler('Người bán không có sẵn với id này', 400));
             }
+            await Product.destroy({
+                where: { shopId: seller.id },
+            });
+            await Event.destroy({
+                where: { shopId: seller.id },
+            });
+            await CoupounCode.destroy({
+                where: { shopId: seller.id },
+            });
             await seller.destroy();
             res.status(201).json({
                 success: true,

@@ -29,14 +29,14 @@ router.post(
           groupTitle: groupTitle,
         });
 
-       return res.status(201).json({
+        return res.status(201).json({
           success: true,
           conversation,
         });
       }
     } catch (error) {
       return res.json({
-        message  : error.message,
+        message: error.message,
       })
     }
   })
@@ -45,16 +45,21 @@ router.post(
 // get seller conversations
 router.get(
   "/get-all-conversation-seller/:id",
-   isSeller,
+  isSeller,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const sellerId = req.params.id;
       const conversations = await Conversation.findAll({});
       const filteredConversations = conversations.filter((conversation) => {
-        const membersArray = conversation.members
-        .replace(/[\[\]']+/g, '')  
-        .split(',');     
-        return membersArray.includes(sellerId); 
+        let members = conversation.members;
+        if (typeof members === 'string') {
+          try {
+            members = JSON.parse(members);
+          } catch (e) {
+            members = [];
+          }
+        }
+        return Array.isArray(members) && members.includes(sellerId);
       });
       if (filteredConversations.length === 0) {
         return res.status(404).json({
@@ -63,8 +68,12 @@ router.get(
         });
       }
       const updatedProducts = filteredConversations.map(product => {
-        const newProduct = product.toJSON(); 
-        newProduct.members = JSON.parse(newProduct.members);
+        const newProduct = product.toJSON();
+        try {
+          newProduct.members = typeof newProduct.members === 'string' ? JSON.parse(newProduct.members) : newProduct.members;
+        } catch (e) {
+          newProduct.members = [];
+        }
         return newProduct;
       });
       res.status(200).json({
@@ -86,10 +95,15 @@ router.get(
       const sellerId = req.params.id;
       const conversations = await Conversation.findAll({});
       const filteredConversations = conversations.filter((conversation) => {
-        const membersArray = conversation.members
-        .replace(/[\[\]']+/g, '')  
-        .split(',');     
-        return membersArray.includes(sellerId); 
+        let members = conversation.members;
+        if (typeof members === 'string') {
+          try {
+            members = JSON.parse(members);
+          } catch (e) {
+            members = [];
+          }
+        }
+        return Array.isArray(members) && members.includes(sellerId);
       });
       if (filteredConversations.length === 0) {
         return res.status(404).json({
@@ -99,12 +113,16 @@ router.get(
       }
       const updatedProducts = filteredConversations.map(product => {
         const newProduct = product.toJSON();
-        newProduct.members = JSON.parse(newProduct.members);
+        try {
+          newProduct.members = typeof newProduct.members === 'string' ? JSON.parse(newProduct.members) : newProduct.members;
+        } catch (e) {
+          newProduct.members = [];
+        }
         return newProduct;
       });
       res.status(201).json({
         success: true,
-        conversations : updatedProducts,
+        conversations: updatedProducts,
       });
     } catch (error) {
       return next(new ErrorHandler(error), 500);
@@ -120,14 +138,14 @@ router.put(
       const { lastMessage, lastMessageId } = req.body;
       const conversationId = req.params.id;
 
-      const conversation = await Conversation.findOne({where :{id :req.params.id}})
+      const conversation = await Conversation.findOne({ where: { id: req.params.id } })
       if (!conversation) {
         return next(new ErrorHandler("Cuộc trò chuyện không tồn tại!", 404));
       }
       conversation.lastMessage = lastMessage;
       conversation.lastMessageId = lastMessageId;
-      
-    await conversation.save();
+
+      await conversation.save();
 
       res.status(201).json({
         success: true,

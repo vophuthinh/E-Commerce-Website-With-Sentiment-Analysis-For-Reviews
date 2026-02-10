@@ -20,26 +20,32 @@ router.post(
         amount,
       };
 
+      const shop = await Shop.findByPk(req.seller.id);
+
+      if (amount <= 0) {
+        return next(new ErrorHandler("Số tiền rút phải lớn hơn 0!", 400));
+      }
+
+      if (amount > shop.availableBalance) {
+        return next(new ErrorHandler("Số dư không đủ để thực hiện giao dịch này!", 400));
+      }
+
+      const withdraw = await Withdraw.create(data);
+
+      shop.availableBalance = shop.availableBalance - amount;
+
+      await shop.save();
+
       try {
         await sendMail({
           email: req.seller.email,
           subject: "Withdraw Request",
           message: `Xin chào ${req.seller.name},Yêu cầu rút tiền của bạn ${amount}$ đang được xử lý. Sẽ mất 1 khoảng thời gian cho việc rút tiền, vui lòng đợi từ 3 - 5 ngày! `,
         });
-        res.status(201).json({
-          success: true,
-        });
       } catch (error) {
-        return next(new ErrorHandler(error.message, 500));
+        // Log error but the transaction is successful
+        console.error("Email sending failed:", error);
       }
-
-      const withdraw = await Withdraw.create(data);
-
-      const shop = await Shop.findById(req.seller.id);
-
-      shop.availableBalance = shop.availableBalance - amount;
-
-      await shop.save();
 
       res.status(201).json({
         success: true,
@@ -59,11 +65,22 @@ router.get(
   isAdmin("Admin"),
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const withdraws = await Withdraw.find().sort({ createdAt: -1 });
+      const withdraws = await Withdraw.findAll({
+        order: [['createdAt', 'DESC']]
+      });
+
+      // Parse JSON fields if necessary
+      const updatedWithdraws = withdraws.map(w => {
+        const wd = w.toJSON();
+        if (typeof wd.seller === 'string') {
+          try { wd.seller = JSON.parse(wd.seller); } catch (e) { }
+        }
+        return wd;
+      });
 
       res.status(201).json({
         success: true,
-        withdraws,
+        withdraws: updatedWithdraws,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -80,25 +97,44 @@ router.put(
     try {
       const { sellerId } = req.body;
 
-      const withdraw = await Withdraw.findByIdAndUpdate(
-        req.params.id,
-        {
-          status: "succeed",
-          updatedAt: Date.now(),
-        },
-        { new: true }
-      );
+      const withdraw = await Withdraw.findByPk(req.params.id);
 
-      const seller = await Shop.findById(sellerId);
+      if (!withdraw) {
+        return next(new ErrorHandler("Withdraw not found", 404));
+      }
 
-      const transection = {
-        id: withdraw.id,
+      withdraw.status = "succeed";
+      withdraw.updatedAt = new Date();
+      await withdraw.save();
+
+      const seller = await Shop.findByPk(sellerId);
+
+      const transaction = {
+        _id: withdraw.id,
         amount: withdraw.amount,
         updatedAt: withdraw.updatedAt,
         status: withdraw.status,
       };
 
-      seller.transections = [...seller.transections, transection];
+      // Assuming transections is a JSON field in Shop
+      let currentTransactions = seller.transections;
+      // Handle parsing if it comes as string or JSON
+      try {
+        if (typeof currentTransactions === 'string') {
+          currentTransactions = JSON.parse(currentTransactions);
+        }
+      } catch (e) {
+        currentTransactions = [];
+      }
+
+      if (!Array.isArray(currentTransactions)) {
+        currentTransactions = [];
+      }
+
+      currentTransactions.push(transaction);
+
+      // Update shop JSON field
+      seller.transections = currentTransactions;
 
       await seller.save();
 

@@ -11,24 +11,14 @@ export const wishlistReducer = createReducer(initialState, {
     const item = action.payload;
     const isItemExist = state.wishlist.find((i) => i.id === item.id);
     if (isItemExist) {
-      return {
-        ...state,
-        wishlist: state.wishlist.map((i) =>
-          i.id === isItemExist.id ? item : i
-        ),
-      };
+      const index = state.wishlist.findIndex((i) => i.id === isItemExist.id);
+      state.wishlist[index] = item;
     } else {
-      return {
-        ...state,
-        wishlist: [...state.wishlist, item],
-      };
+      state.wishlist.push(item);
     }
   },
 
   removeFromWishlist: (state, action) => {
-    return {
-      ...state,
-      wishlist: state.wishlist.filter((i) => i.id !== action.payload),
-    };
+    state.wishlist = state.wishlist.filter((i) => i.id !== action.payload);
   },
 });

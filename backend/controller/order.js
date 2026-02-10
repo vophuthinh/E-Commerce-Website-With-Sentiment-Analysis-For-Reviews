@@ -6,13 +6,15 @@ const { isAuthenticated, isSeller, isAdmin } = require("../middleware/auth");
 const Order = require("../model/order");
 const Shop = require("../model/shop");
 const Product = require("../model/product");
+const safeJSONParse = require("../utils/safeJSONParse");
 
 // create new order
 router.post(
   "/create-order",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { cart, shippingAddress, user, totalPrice, paymentInfo } = req.body;
+      const { cart, shippingAddress, user, paymentInfo } = req.body;
+
       //   group cart items by shopId
       const shopItemsMap = new Map();
       for (const item of cart) {
@@ -22,17 +24,42 @@ router.post(
         }
         shopItemsMap.get(shopId).push(item);
       }
+
       // create an order for each shop
       const orders = [];
 
       for (const [shopId, items] of shopItemsMap) {
+        let orderTotal = 0;
+        const productsWithDetails = [];
+
+        // Verify stock and price for each item in this shop's cart
+        for (const item of items) {
+          const product = await Product.findByPk(item.id);
+          if (!product) {
+            return next(new ErrorHandler(`Product with id ${item.id} not found`, 404));
+          }
+          if (product.stock < item.qty) {
+            return next(new ErrorHandler(`Insufficient stock for product ${product.name}`, 400));
+          }
+
+          // Deduct stock immediately
+          product.stock -= item.qty;
+          product.sold_out = (product.sold_out || 0) + item.qty;
+          await product.save();
+
+          // Calculate price for this item based on DB price
+          const itemPrice = parseFloat(product.discountPrice) || parseFloat(product.originalPrice) || 0;
+          orderTotal += itemPrice * item.qty;
+
+          productsWithDetails.push(item);
+        }
+
         const order = await Order.create({
-          cart: items,
+          cart: productsWithDetails,
           shipping_address: shippingAddress,
           user,
-          total_price: totalPrice,
+          total_price: orderTotal, // Use calculated total for this shop
           paymentInfo,
-          
         });
         orders.push(order);
       }
@@ -56,11 +83,11 @@ router.get(
         where: { "user.id": req.params.userId },
       })
       const updatedProducts = orders.map(product => {
-        const newProduct = product.toJSON(); 
-        newProduct.cart = JSON.parse(newProduct.cart);
-        newProduct.shipping_address = JSON.parse(newProduct.shipping_address);
-        newProduct.user = JSON.parse(newProduct.user);
-        newProduct.paymentInfo = JSON.parse(newProduct.paymentInfo);
+        const newProduct = product.toJSON();
+        newProduct.cart = safeJSONParse(newProduct.cart, []);
+        newProduct.shipping_address = safeJSONParse(newProduct.shipping_address, {});
+        newProduct.user = safeJSONParse(newProduct.user, {});
+        newProduct.paymentInfo = safeJSONParse(newProduct.paymentInfo, {});
         return newProduct;
       });
       const newUpdatedProducts = updatedProducts.map(product => ({
@@ -69,12 +96,12 @@ router.get(
         totalPrice: product.total_price,
         paidAt: product.paid_at,
         deliveredAt: product.delivered_at,
-        createdAt : product.created_at
+        createdAt: product.created_at
 
       }));
       res.status(200).json({
         success: true,
-        orders :newUpdatedProducts,
+        orders: newUpdatedProducts,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -91,13 +118,11 @@ router.get(
         "cart.shopId": req.params.shopId,
       })
       const updatedProducts = orders.map(product => {
-     
         const newProduct = product.toJSON();
-        newProduct.cart = JSON.parse(newProduct.cart);
-        newProduct.shipping_address = JSON.parse(newProduct.shipping_address);
-        newProduct.user = JSON.parse(newProduct.user);
-        newProduct.paymentInfo = JSON.parse(newProduct.paymentInfo);
-
+        newProduct.cart = safeJSONParse(newProduct.cart, []);
+        newProduct.shipping_address = safeJSONParse(newProduct.shipping_address, {});
+        newProduct.user = safeJSONParse(newProduct.user, {});
+        newProduct.paymentInfo = safeJSONParse(newProduct.paymentInfo, {});
         return newProduct;
       });
       const newUpdatedProducts = updatedProducts.map(product => ({
@@ -106,12 +131,12 @@ router.get(
         totalPrice: product.total_price,
         paidAt: product.paid_at,
         deliveredAt: product.delivered_at,
-        createdAt : product.created_at
+        createdAt: product.created_at
 
       }));
       res.status(200).json({
         success: true,
-        orders :newUpdatedProducts,
+        orders: newUpdatedProducts,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -132,19 +157,46 @@ router.put(
           new ErrorHandler("Đơn hàng không tìm thấy với ID này", 400)
         );
       }
+
+      // Check ownership
+      let cartItems = order.cart;
+      if (typeof cartItems === 'string') {
+        try {
+          cartItems = JSON.parse(cartItems);
+        } catch (e) {
+          cartItems = [];
+        }
+      }
+      // Assuming all items in an order belong to the same shop as per create-order logic
+      if (Array.isArray(cartItems) && cartItems.length > 0) {
+        if (cartItems[0].shopId !== req.seller.id) {
+          return next(new ErrorHandler("Bạn không có quyền cập nhật đơn hàng này", 403));
+        }
+      }
+
       if (req.body.status === "Transferred to delivery partner") {
-        const cartDataOrder = JSON.parse(order.cart) || '[]'
-        cartDataOrder.forEach(async (o) => {
-          await updateOrder(o.id, o.qty);
-        });
+        // Stock already deducted at creation
       }
 
       order.status = req.body.status;
 
       if (req.body.status === "Delivered") {
         order.deliveredAt = Date.now();
-        const infoPayment = JSON.parse(order.paymentInfo)
-        infoPayment.status = "Succeeded";
+
+        let infoPayment = order.paymentInfo;
+        if (typeof infoPayment === 'string') {
+          try {
+            infoPayment = JSON.parse(infoPayment);
+          } catch (e) {
+            infoPayment = {};
+          }
+        }
+
+        if (infoPayment) {
+          infoPayment.status = "Succeeded";
+          order.paymentInfo = infoPayment;
+        }
+
         const serviceCharge = order.total_price * 0.1;
         await updateSellerInfo(order.total_price - serviceCharge);
       }
@@ -161,7 +213,8 @@ router.put(
       }
       async function updateSellerInfo(amount) {
         const seller = await Shop.findByPk(req.seller.id);
-        seller.availableBalance = amount;
+        const currentBalance = parseFloat(seller.availableBalance) || 0;
+        seller.availableBalance = currentBalance + parseFloat(amount);
         await seller.save();
       }
     } catch (error) {
@@ -222,10 +275,19 @@ router.put(
       });
 
       if (req.body.status === "Refund Success") {
-        const cartOrder = JSON.parse(order.cart)||'[]'
-        cartOrder.forEach(async (o) => {
+        let cartOrder = order.cart;
+        if (typeof cartOrder === 'string') {
+          try {
+            cartOrder = JSON.parse(cartOrder);
+          } catch (e) {
+            cartOrder = [];
+          }
+        }
+        if (!Array.isArray(cartOrder)) cartOrder = [];
+
+        for (const o of cartOrder) {
           await updateOrder(o.productId, o.quantity);
-        });
+        }
       }
       async function updateOrder(id, qty) {
         const product = await Product.findByPk(id);
@@ -249,11 +311,11 @@ router.get(
     try {
       const orders = await Order.findAll({})
       const updatedProducts = orders.map(product => {
-        const newProduct = product.toJSON(); 
-        newProduct.cart = JSON.parse(newProduct.cart);
-        newProduct.shipping_address = JSON.parse(newProduct.shipping_address);
-        newProduct.user = JSON.parse(newProduct.user);
-        newProduct.paymentInfo = JSON.parse(newProduct.paymentInfo);
+        const newProduct = product.toJSON();
+        newProduct.cart = safeJSONParse(newProduct.cart, []);
+        newProduct.shipping_address = safeJSONParse(newProduct.shipping_address, {});
+        newProduct.user = safeJSONParse(newProduct.user, {});
+        newProduct.paymentInfo = safeJSONParse(newProduct.paymentInfo, {});
         return newProduct;
       });
       const newUpdatedProducts = updatedProducts.map(product => ({
@@ -262,11 +324,11 @@ router.get(
         totalPrice: product.total_price,
         paidAt: product.paid_at,
         deliveredAt: product.delivered_at,
-        createdAt : product.created_at
+        createdAt: product.created_at
       }));
       res.status(201).json({
         success: true,
-        orders :newUpdatedProducts,
+        orders: newUpdatedProducts,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));

@@ -15,15 +15,15 @@ const OrderDetails = () => {
     const dispatch = useDispatch();
     const [status, setStatus] = useState('');
     const navigate = useNavigate();
-    console.log(orders,'ordersordersorders')
+    console.log(orders, 'ordersordersorders')
     const { id } = useParams();
 
     useEffect(() => {
         dispatch(getAllOrdersOfShop(seller.id));
-    }, [dispatch,seller.id]);
+    }, [dispatch, seller.id]);
 
     const data = orders && orders.find((item) => item.id == id);
-    console.log(data,'datadatadata')
+    console.log(data, 'datadatadata')
 
     const orderUpdateHandler = async (e) => {
         await axios
@@ -92,7 +92,7 @@ const OrderDetails = () => {
             {data &&
                 data?.cart.map((item, index) => (
                     <div className="w-full flex items-start mb-5">
-                        <img src={`${backend_url}/${item.images[0]}`} alt="" className="w-[80x] h-[80px]" />
+                        <img src={`${backend_url}${item.images[0]}`} alt="" className="w-[80x] h-[80px]" />
                         <div className="w-full">
                             <h5 className="pl-3 text-[20px]">{item.name}</h5>
                             <h5 className="pl-3 text-[20px] text-[#00000091]">

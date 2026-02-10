@@ -49,7 +49,6 @@ const AllProducts = () => {
 
     const handleDelete = (id) => {
         dispatch(deleteProduct(id));
-        window.location.reload();
     };
     const handelEdit = (id) => {
         try {
