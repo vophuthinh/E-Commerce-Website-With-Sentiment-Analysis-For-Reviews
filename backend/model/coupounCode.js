@@ -1,7 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
+
 const CoupounCode = sequelize.define(
   "CoupounCode",
   {
@@ -25,15 +24,15 @@ const CoupounCode = sequelize.define(
       allowNull: false,
     },
     selectedProducts: {
-        type: DataTypes.TEXT, 
-        allowNull: true,
-        get() {
-          const value = this.getDataValue("selectedProducts");
-          return value ? JSON.parse(value) : [];
-        },
-        set(value) {
-          this.setDataValue("selectedProducts", JSON.stringify(value));
-        },
+      type: DataTypes.TEXT,
+      allowNull: true,
+      get() {
+        const value = this.getDataValue("selectedProducts");
+        return value ? JSON.parse(value) : [];
+      },
+      set(value) {
+        this.setDataValue("selectedProducts", JSON.stringify(value));
+      },
     },
     created_at: {
       type: DataTypes.DATE,

@@ -4,8 +4,8 @@ const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const express = require("express");
 const path = require("path");
 const { upload } = require("../multer");
-// const { io } = require("../server");
 const router = express.Router();
+
 router.post(
   "/create-new-message",
   upload.single("images"),
@@ -28,13 +28,15 @@ router.post(
         images: messageData.images ? messageData.images : undefined,
       });
       await message.save();
-      io.emit("newMsg", { success: true });
+      if (io) {
+        io.emit("newMsg", { success: true });
+      }
       res.status(201).json({
         success: true,
         message,
       });
     } catch (error) {
-      return next(new ErrorHandler(error.message), 500);
+      return next(new ErrorHandler(error.message, 500));
     }
   })
 );
@@ -48,12 +50,12 @@ router.get(
         where: { conversationId: req.params.id },
       });
 
-      res.status(201).json({
+      res.status(200).json({
         success: true,
         messages: messages,
       });
     } catch (error) {
-      return next(new ErrorHandler(error.message), 500);
+      return next(new ErrorHandler(error.message, 500));
     }
   })
 );

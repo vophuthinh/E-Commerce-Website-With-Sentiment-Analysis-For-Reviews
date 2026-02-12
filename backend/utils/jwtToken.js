@@ -9,9 +9,13 @@ const sendToken = (user, statusCode, res) => {
     secure: true,
   };
 
+  // Exclude password from response
+  const userObj = user.toJSON ? user.toJSON() : { ...user };
+  delete userObj.password;
+
   res.status(statusCode).cookie("token", token, options).json({
     success: true,
-    user,
+    user: userObj,
     token,
   });
 };

@@ -10,8 +10,8 @@ const jwt = require('jsonwebtoken');
 const sendMail = require('../utils/sendMail');
 const sendToken = require('../utils/jwtToken');
 const { isAuthenticated, isAdmin } = require('../middleware/auth');
-const cloudinary = require('cloudinary');
 const bcrypt = require('bcryptjs');
+const { validate, validateUserLogin, validatePasswordUpdate } = require('../middleware/validator');
 
 router.post('/create-user', upload.single('file'), catchAsyncErrors(async (req, res, next) => {
     try {
@@ -124,6 +124,7 @@ router.post(
 // login user
 router.post(
     '/login-user',
+    validate(validateUserLogin),
     catchAsyncErrors(async (req, res, next) => {
         try {
             const { email, password } = req.body;
@@ -138,7 +139,7 @@ router.post(
             if (!isPasswordValid) {
                 return next(new ErrorHandler('Vui lòng cung cấp thông tin chính xác!', 400));
             }
-            sendToken(user, 201, res);
+            sendToken(user, 200, res);
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
         }
@@ -151,7 +152,9 @@ router.get(
     isAuthenticated,
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const user = await User.findByPk(req.user.id);
+            const user = await User.findByPk(req.user.id, {
+                attributes: { exclude: ['password'] },
+            });
 
             if (!user) {
                 return next(new ErrorHandler('Người dùng không tồn tại!', 400));
@@ -176,7 +179,7 @@ router.get(
                 expires: new Date(Date.now()),
                 httpOnly: true,
             });
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 message: 'Đăng xuất thành công!',
             });
@@ -207,9 +210,13 @@ router.put(
 
             await user.save();
 
-            res.status(201).json({
+            // Exclude password from response
+            const userObj = user.toJSON();
+            delete userObj.password;
+
+            res.status(200).json({
                 success: true,
-                user,
+                user: userObj,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -235,9 +242,14 @@ router.put(
             const fileUrl = path.join(req.file.filename);
             existsUser.avatar = fileUrl;
             await existsUser.save();
+
+            // Exclude password from response
+            const userObj = existsUser.toJSON();
+            delete userObj.password;
+
             res.status(200).json({
                 success: true,
-                user: existsUser,
+                user: userObj,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -279,9 +291,14 @@ router.put(
             }
             user.addresses = newAdd;
             await user.save();
+
+            // Exclude password from response
+            const userObj = user.toJSON();
+            delete userObj.password;
+
             res.status(200).json({
                 success: true,
-                user,
+                user: userObj,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -318,7 +335,12 @@ router.delete(
                 user.addresses = JSON.stringify(updatedAddresses);
             }
             await user.save();
-            res.status(200).json({ success: true, user });
+
+            // Exclude password from response
+            const userObj = user.toJSON();
+            delete userObj.password;
+
+            res.status(200).json({ success: true, user: userObj });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
         }
@@ -329,6 +351,7 @@ router.delete(
 router.put(
     '/update-user-password',
     isAuthenticated,
+    validate(validatePasswordUpdate),
     catchAsyncErrors(async (req, res, next) => {
         try {
             const user = await User.findByPk(req.user.id);
@@ -354,14 +377,16 @@ router.put(
     }),
 );
 
-// find user infoormation with the userId
+// find user information with the userId
 router.get(
     '/user-info/:id',
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const user = await User.findByPk(req.params.id);
+            const user = await User.findByPk(req.params.id, {
+                attributes: { exclude: ['password'] },
+            });
 
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 user,
             });
@@ -378,8 +403,10 @@ router.get(
     isAdmin('Admin'),
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const users = await User.findAll({});
-            res.status(201).json({
+            const users = await User.findAll({
+                attributes: { exclude: ['password'] },
+            });
+            res.status(200).json({
                 success: true,
                 users,
             });
@@ -401,7 +428,7 @@ router.delete(
                 return next(new ErrorHandler('Người dùng không khả dụng với id này!', 400));
             }
             await user.destroy();
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 message: 'Xóa người dùng thành công!',
             });
@@ -437,10 +464,14 @@ router.put(
             user.role = role;
             await user.save();
 
+            // Exclude password from response
+            const userObj = user.toJSON();
+            delete userObj.password;
+
             res.status(200).json({
                 success: true,
                 message: 'Role updated successfully',
-                user,
+                user: userObj,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));

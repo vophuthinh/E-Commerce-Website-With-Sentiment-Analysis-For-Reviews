@@ -1,7 +1,6 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
+
 const Product = sequelize.define(
   "Product",
   {
@@ -23,6 +22,7 @@ const Product = sequelize.define(
     originalPrice: {
       type: DataTypes.DECIMAL(10, 2),
     },
+    // NOTE: discount_price is kept for backward compatibility with existing DB data
     discount_price: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,

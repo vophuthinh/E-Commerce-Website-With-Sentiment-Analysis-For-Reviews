@@ -8,7 +8,8 @@ const Shop = require('../model/shop');
 const { upload } = require('../multer');
 const ErrorHandler = require('../utils/ErrorHandler');
 const fs = require('fs');
-const { analyzeSentiment, checkModelStatus, getDominantLabel, analyzeAspects } = require('./analyzeSentiment');
+const logger = require('../utils/logger');
+const { analyzeSentiment, analyzeAspects, buildSentimentResult } = require('./analyzeSentiment');
 const safeJSONParse = require('../utils/safeJSONParse');
 
 // create product
@@ -115,30 +116,27 @@ router.delete(
             const productId = req.params.id;
 
             const productData = await Product.findByPk(productId);
-            let imageArr = productData.images;
-            if (typeof imageArr === 'string') {
-                imageArr = JSON.parse(imageArr);
+            if (!productData) {
+                return next(new ErrorHandler('Không tìm thấy sản phẩm với ID này!', 404));
             }
-            imageArr.forEach((imageUrl) => {
-                const filename = imageUrl;
-                const filePath = `uploads/${filename}`;
-
-                fs.unlink(filePath, (err) => {
-                    if (err) {
-                        // Error deleting file, continue anyway
-                    }
+            let imageArr = safeJSONParse(productData.images, []);
+            if (Array.isArray(imageArr)) {
+                imageArr.forEach((imageUrl) => {
+                    const filePath = `uploads/${imageUrl}`;
+                    fs.unlink(filePath, (err) => {
+                        if (err) {
+                            // Error deleting file, continue anyway
+                        }
+                    });
                 });
-            });
-            const product = await productData.destroy();
-            if (!product) {
-                return next(new ErrorHandler('Không tìm thấy sản phẩm với ID này!', 500));
             }
-            res.status(201).json({
+            await productData.destroy();
+            res.status(200).json({
                 success: true,
                 message: 'Xóa sản phẩm thành công!',
             });
         } catch (error) {
-            return next(new ErrorHandler(error, 400));
+            return next(new ErrorHandler(error.message, 400));
         }
     }),
 );
@@ -156,12 +154,12 @@ router.get(
                 newProduct.reviews = safeJSONParse(newProduct.reviews, []);
                 return newProduct;
             });
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 products: updatedProducts,
             });
         } catch (error) {
-            return next(new ErrorHandler(error, 400));
+            return next(new ErrorHandler(error.message, 400));
         }
     }),
 );
@@ -174,109 +172,151 @@ router.put(
         try {
             const { user, rating, comment, productId, orderId } = req.body;
 
-            // Tìm sản phẩm
-            const product = await Product.findByPk(productId);
+            // ── 1. Input Validation ──
+            const numRating = Number(rating);
+            if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
+                return next(new ErrorHandler('Rating phải là số nguyên từ 1 đến 5!', 400));
+            }
+            if (!productId) {
+                return next(new ErrorHandler('Thiếu thông tin sản phẩm!', 400));
+            }
+            if (!user || !user.id) {
+                return next(new ErrorHandler('Thiếu thông tin người dùng!', 400));
+            }
+            // Require comment for low ratings (1-2 stars) — helps sellers improve
+            if (numRating <= 2 && (!comment || comment.trim().length === 0)) {
+                return next(new ErrorHandler('Vui lòng cho biết lý do bạn không hài lòng (bắt buộc khi đánh giá 1-2 sao)!', 400));
+            }
 
-            // Nếu không tìm thấy sản phẩm, trả về lỗi
+            // ── 2. Find Product ──
+            const product = await Product.findByPk(productId);
             if (!product) {
                 return next(new ErrorHandler('Sản phẩm không tồn tại!', 404));
             }
 
-            // Perform Sentiment Analysis HERE
-            let sentimentData = null;
-            if (comment) {
-                // Check if model is ready (optional, or just try to analyze)
-                const isModelReady = await checkModelStatus();
-                if (isModelReady) {
-                    if (isModelReady) {
-                        const sentimentResult = await analyzeSentiment(comment);
-                        const aspectResult = await analyzeAspects(comment);
-
-                        if (sentimentResult) {
-                            sentimentData = getDominantLabel(sentimentResult);
-                            if (sentimentData && aspectResult.length > 0) {
-                                sentimentData.aspects = aspectResult;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Verify if user actually purchased and received the product
-            const orders = await Order.findAll({
-                where: {
-                    'user.id': req.user.id,
-                    status: 'Delivered'
-                }
+            // ── 3. Purchase Verification (optimized) ──
+            // Only fetch delivered orders, then filter by user in JS
+            const allDeliveredOrders = await Order.findAll({
+                where: { status: 'Delivered' },
+                attributes: ['id', 'user', 'cart'],
+            });
+            const userOrders = allDeliveredOrders.filter(order => {
+                const orderUser = safeJSONParse(order.user, {});
+                return String(orderUser.id) === String(req.user.id);
             });
 
-            let isPurchased = false;
-            for (const order of orders) {
-                let cartItems = safeJSONParse(order.cart, []);
+            // Check if the user purchased this specific product
+            let matchedOrderId = null;
+            for (const order of userOrders) {
+                const cartItems = safeJSONParse(order.cart, []);
                 if (Array.isArray(cartItems)) {
-                    const found = cartItems.find(item => item.id === productId || item._id === productId); // Check both id formats just in case
+                    const found = cartItems.find(
+                        item => String(item.id) === String(productId) || String(item._id) === String(productId)
+                    );
                     if (found) {
-                        isPurchased = true;
+                        matchedOrderId = order.id;
                         break;
                     }
                 }
             }
 
-            if (!isPurchased) {
+            if (!matchedOrderId) {
                 return next(new ErrorHandler('Bạn chỉ có thể đánh giá sản phẩm đã mua và đã nhận hàng!', 400));
             }
 
+            // ── 4. Sentiment Analysis (non-blocking) ──
+            let sentimentData = null;
+            if (comment && comment.trim().length > 0) {
+                try {
+                    const [sentimentResult, aspectResult] = await Promise.all([
+                        analyzeSentiment(comment),
+                        analyzeAspects(comment),
+                    ]);
+
+                    if (sentimentResult) {
+                        sentimentData = buildSentimentResult(sentimentResult, aspectResult, comment, numRating);
+                    }
+                } catch (sentimentError) {
+                    // Sentiment failure should never block review creation
+                    logger.error(`Sentiment analysis failed for product ${productId}:`, sentimentError.message);
+                }
+            }
+
+            // ── 5. Build Review Object ──
+            const now = new Date();
             const review = {
-                user,
-                rating,
-                comment,
+                user: { id: user.id, name: user.name, avatar: user.avatar }, // only store needed fields
+                rating: numRating,
+                comment: comment ? comment.trim() : '',
                 productId,
-                date: new Date(),
-                sentiment: sentimentData, // Store the result!
+                orderId: orderId || matchedOrderId,
+                date: now,
+                sentiment: sentimentData,
             };
 
+            // ── 6. Existing Reviews — Check: allow one review per user per product ──
             const dataReview = product.reviews ? safeJSONParse(product.reviews, []) : [];
+            const existingIdx = dataReview.findIndex((rev) => String(rev.user?.id) === String(req.user.id));
 
-            const isReviewed = dataReview.find((rev) => rev.user.id == req.user.id);
-
-            if (isReviewed) {
-                dataReview.forEach((rev) => {
-                    if (rev.user.id == req.user.id) {
-                        rev.rating = rating;
-                        rev.comment = comment;
-                        rev.user = user;
-                        rev.date = new Date();
-                        rev.sentiment = sentimentData; // Update sentiment
-                    }
-                });
+            if (existingIdx >= 0) {
+                // Update existing review (preserve original date as createdAt)
+                const existing = dataReview[existingIdx];
+                dataReview[existingIdx] = {
+                    ...review,
+                    createdAt: existing.createdAt || existing.date, // preserve original creation time
+                    date: now, // date = last modified
+                    isEdited: true,
+                };
             } else {
+                review.createdAt = now;
                 dataReview.push(review);
             }
 
-            let avg = 0;
-            dataReview.forEach((rev) => {
-                avg += rev.rating;
-            });
+            // ── 7. Calculate Average Rating ──
+            // Weighted average: if sentiment agrees with rating, full weight; else reduced weight
+            let totalWeight = 0;
+            let weightedSum = 0;
 
-            product.ratings = avg / dataReview.length;
+            for (const rev of dataReview) {
+                let weight = 1.0;
 
-            // Note: Sequelize updates JSON fields by reassigning
-            product.reviews = dataReview;
+                // If sentiment data exists, use it to weight reviews
+                if (rev.sentiment && rev.sentiment.score) {
+                    const sentimentAgrees =
+                        (rev.rating >= 4 && rev.sentiment.label === 'POS') ||
+                        (rev.rating <= 2 && rev.sentiment.label === 'NEG') ||
+                        (rev.rating === 3);
 
-            // We need to explicitly tell Sequelize that this field has changed if using JSON datatype in some versions, 
-            // but reassigning usually works.
+                    // Reviews where sentiment matches stars are more trustworthy
+                    weight = sentimentAgrees ? 1.0 : 0.8;
 
+                    // Sarcasm detected → reduce weight further
+                    if (rev.sentiment.sarcasmDetected) {
+                        weight *= 0.7;
+                    }
+                }
+
+                weightedSum += rev.rating * weight;
+                totalWeight += weight;
+            }
+
+            const avgRating = totalWeight > 0 ? (weightedSum / totalWeight) : 0;
+            const roundedRating = parseFloat(avgRating.toFixed(2));
+
+            // ── 8. Save to DB ──
             await Product.update(
                 {
                     reviews: dataReview,
-                    ratings: avg / dataReview.length
+                    ratings: roundedRating,
                 },
                 { where: { id: productId } }
             );
 
             res.status(200).json({
                 success: true,
-                message: 'Đánh giá thành công!',
+                message: existingIdx >= 0 ? 'Cập nhật đánh giá thành công!' : 'Đánh giá thành công!',
+                review,
+                averageRating: roundedRating,
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -292,7 +332,7 @@ router.get(
     catchAsyncErrors(async (req, res, next) => {
         try {
             const products = await Product.findAll({});
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 products,
             });
@@ -301,4 +341,38 @@ router.get(
         }
     }),
 );
+
+// get sentiment statistics for a shop
+router.get(
+    '/sentiment-stats/:shopId',
+    catchAsyncErrors(async (req, res, next) => {
+        try {
+            const { aggregateSentiments } = require('./analyzeSentiment');
+            const products = await Product.findAll({
+                where: { shopId: req.params.shopId },
+            });
+
+            // Collect all reviews from all products
+            const allReviews = [];
+            for (const product of products) {
+                const reviews = safeJSONParse(product.reviews, []);
+                if (Array.isArray(reviews)) {
+                    allReviews.push(...reviews);
+                }
+            }
+
+            const stats = aggregateSentiments(allReviews);
+
+            res.status(200).json({
+                success: true,
+                stats,
+                totalProducts: products.length,
+                totalReviews: allReviews.length,
+            });
+        } catch (error) {
+            return next(new ErrorHandler(error.message, 500));
+        }
+    }),
+);
+
 module.exports = router;

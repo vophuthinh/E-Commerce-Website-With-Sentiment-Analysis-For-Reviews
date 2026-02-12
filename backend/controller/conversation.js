@@ -3,9 +3,17 @@ const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const express = require("express");
 const { isSeller, isAuthenticated } = require("../middleware/auth");
-const sequelize = require("../config/database");
-const { Op } = require("sequelize");
+const safeJSONParse = require("../utils/safeJSONParse");
 const router = express.Router();
+
+/**
+ * Helper: Parse conversation members and normalize conversation object
+ */
+function normalizeConversation(conv) {
+  const obj = conv.toJSON ? conv.toJSON() : { ...conv };
+  obj.members = safeJSONParse(obj.members, []);
+  return obj;
+}
 
 // create a new conversation
 router.post(
@@ -19,9 +27,9 @@ router.post(
 
       if (isConversationExist) {
         const conversation = isConversationExist;
-        res.status(201).json({
+        res.status(200).json({
           success: true,
-          conversation,
+          conversation: normalizeConversation(conversation),
         });
       } else {
         const conversation = await Conversation.create({
@@ -31,13 +39,11 @@ router.post(
 
         return res.status(201).json({
           success: true,
-          conversation,
+          conversation: normalizeConversation(conversation),
         });
       }
     } catch (error) {
-      return res.json({
-        message: error.message,
-      })
+      return next(new ErrorHandler(error.message, 500));
     }
   })
 );
@@ -51,34 +57,19 @@ router.get(
       const sellerId = req.params.id;
       const conversations = await Conversation.findAll({});
       const filteredConversations = conversations.filter((conversation) => {
-        let members = conversation.members;
-        if (typeof members === 'string') {
-          try {
-            members = JSON.parse(members);
-          } catch (e) {
-            members = [];
-          }
-        }
+        const members = safeJSONParse(conversation.members, []);
         return Array.isArray(members) && members.includes(sellerId);
       });
       if (filteredConversations.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không có cuộc trò chuyện nào!',
+        return res.status(200).json({
+          success: true,
+          conversations: [],
         });
       }
-      const updatedProducts = filteredConversations.map(product => {
-        const newProduct = product.toJSON();
-        try {
-          newProduct.members = typeof newProduct.members === 'string' ? JSON.parse(newProduct.members) : newProduct.members;
-        } catch (e) {
-          newProduct.members = [];
-        }
-        return newProduct;
-      });
+      const normalizedConversations = filteredConversations.map(normalizeConversation);
       res.status(200).json({
         success: true,
-        conversations: updatedProducts,
+        conversations: normalizedConversations,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -92,40 +83,25 @@ router.get(
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const sellerId = req.params.id;
+      const userId = req.params.id;
       const conversations = await Conversation.findAll({});
       const filteredConversations = conversations.filter((conversation) => {
-        let members = conversation.members;
-        if (typeof members === 'string') {
-          try {
-            members = JSON.parse(members);
-          } catch (e) {
-            members = [];
-          }
-        }
-        return Array.isArray(members) && members.includes(sellerId);
+        const members = safeJSONParse(conversation.members, []);
+        return Array.isArray(members) && members.includes(userId);
       });
       if (filteredConversations.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không có cuộc trò chuyện nào!',
+        return res.status(200).json({
+          success: true,
+          conversations: [],
         });
       }
-      const updatedProducts = filteredConversations.map(product => {
-        const newProduct = product.toJSON();
-        try {
-          newProduct.members = typeof newProduct.members === 'string' ? JSON.parse(newProduct.members) : newProduct.members;
-        } catch (e) {
-          newProduct.members = [];
-        }
-        return newProduct;
-      });
-      res.status(201).json({
+      const normalizedConversations = filteredConversations.map(normalizeConversation);
+      res.status(200).json({
         success: true,
-        conversations: updatedProducts,
+        conversations: normalizedConversations,
       });
     } catch (error) {
-      return next(new ErrorHandler(error), 500);
+      return next(new ErrorHandler(error.message, 500));
     }
   })
 );
@@ -136,9 +112,8 @@ router.put(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { lastMessage, lastMessageId } = req.body;
-      const conversationId = req.params.id;
 
-      const conversation = await Conversation.findOne({ where: { id: req.params.id } })
+      const conversation = await Conversation.findByPk(req.params.id);
       if (!conversation) {
         return next(new ErrorHandler("Cuộc trò chuyện không tồn tại!", 404));
       }
@@ -147,12 +122,12 @@ router.put(
 
       await conversation.save();
 
-      res.status(201).json({
+      res.status(200).json({
         success: true,
-        conversation,
+        conversation: normalizeConversation(conversation),
       });
     } catch (error) {
-      return next(new ErrorHandler(error), 500);
+      return next(new ErrorHandler(error.message, 500));
     }
   })
 );

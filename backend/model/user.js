@@ -44,15 +44,17 @@ const User = sequelize.define('User', {
     },
 }, {
     tableName: 'users',
-    timestamps: false, 
+    timestamps: false,
 });
 
 User.prototype.getJwtToken = function () {
-  return jwt.sign({ id: this.id }, process.env.JWT_SECRET);
+    return jwt.sign({ id: this.id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES || '7d',
+    });
 };
 
 User.prototype.comparePassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+    return await bcrypt.compare(enteredPassword, this.password);
 };
 
 module.exports = User;

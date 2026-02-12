@@ -1,5 +1,11 @@
 const { Sequelize } = require('sequelize');
 
+if (process.env.NODE_ENV !== 'PRODUCTION') {
+    require('dotenv').config({
+        path: 'config/.env',
+    });
+}
+
 const sequelize = new Sequelize(
     process.env.DB_NAME || 'new-nodejs',
     process.env.DB_USER || 'root',
@@ -11,9 +17,5 @@ const sequelize = new Sequelize(
     }
 );
 
-sequelize
-    .authenticate()
-    .then(() => console.log('MySQL connected...'))
-    .catch((err) => console.error('Connection error:', err));
-
+// Only export the instance — authentication is handled in server.js
 module.exports = sequelize;

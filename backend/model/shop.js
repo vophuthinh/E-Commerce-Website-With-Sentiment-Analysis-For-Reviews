@@ -47,6 +47,7 @@ const Shop = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0,
     },
+    // NOTE: "transections" is a typo for "transactions" — kept for backward compatibility with existing DB
     transections: {
       type: DataTypes.JSON,
     },
@@ -69,7 +70,9 @@ const Shop = sequelize.define(
 );
 
 Shop.prototype.getJwtToken = function () {
-  return jwt.sign({ id: this.id }, process.env.JWT_SECRET);
+  return jwt.sign({ id: this.id }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES || '7d',
+  });
 };
 Shop.prototype.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);

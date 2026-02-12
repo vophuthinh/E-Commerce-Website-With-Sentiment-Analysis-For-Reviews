@@ -4,7 +4,6 @@ const router = express.Router();
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const sendMail = require('../utils/sendMail');
-const sendToken = require('../utils/jwtToken');
 const Shop = require('../model/shop');
 const { isAuthenticated, isSeller, isAdmin } = require('../middleware/auth');
 const { upload } = require('../multer');
@@ -15,6 +14,17 @@ const bcrypt = require('bcryptjs');
 const Product = require("../model/product");
 const Event = require("../model/event");
 const CoupounCode = require("../model/coupounCode");
+const safeJSONParse = require('../utils/safeJSONParse');
+
+/**
+ * Helper: Exclude password from seller object
+ */
+function sanitizeSeller(seller) {
+    const obj = seller.toJSON ? seller.toJSON() : { ...seller };
+    delete obj.password;
+    return obj;
+}
+
 // create shop
 router.post('/create-shop', upload.single('file'), catchAsyncErrors(async (req, res, next) => {
     try {
@@ -62,6 +72,7 @@ router.post('/create-shop', upload.single('file'), catchAsyncErrors(async (req, 
         return next(new ErrorHandler(error.message, 400));
     }
 }));
+
 // create activation token
 const createActivationToken = (seller) => {
     // Only include necessary fields, not password
@@ -76,6 +87,7 @@ const createActivationToken = (seller) => {
         expiresIn: '5m',
     });
 };
+
 // activate user
 router.post(
     '/activation',
@@ -133,7 +145,7 @@ router.post(
             if (!isPasswordValid) {
                 return next(new ErrorHandler('Vui lòng cung cấp thông tin chính xác!', 400));
             }
-            sendShopToken(user, 201, res);
+            sendShopToken(user, 200, res);
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
         }
@@ -151,17 +163,10 @@ router.get(
                 return next(new ErrorHandler('Cửa hàng này không tồn tại!', 400));
             }
 
-            let withdrawMethod = seller.withdrawMethod;
-            if (typeof withdrawMethod === 'string') {
-                try {
-                    withdrawMethod = JSON.parse(withdrawMethod);
-                } catch (e) {
-                    withdrawMethod = null;
-                }
-            }
+            let withdrawMethod = safeJSONParse(seller.withdrawMethod, null);
 
             const newData = {
-                ...seller.toJSON(),
+                ...sanitizeSeller(seller),
                 withdrawMethod,
             };
             return res.status(200).json({
@@ -183,7 +188,7 @@ router.get(
                 expires: new Date(Date.now()),
                 httpOnly: true,
             });
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 message: 'Đăng xuất thành công!',
             });
@@ -198,8 +203,10 @@ router.get(
     '/get-shop-info/:id',
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const shop = await Shop.findByPk(req.params.id);
-            res.status(201).json({
+            const shop = await Shop.findByPk(req.params.id, {
+                attributes: { exclude: ['password'] },
+            });
+            res.status(200).json({
                 success: true,
                 shop,
             });
@@ -235,7 +242,7 @@ router.put(
 
             res.status(200).json({
                 success: true,
-                seller: existsUser,
+                seller: sanitizeSeller(existsUser),
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -261,13 +268,12 @@ router.put(
             shop.description = description;
             shop.address = address;
             shop.phoneNumber = phoneNumber;
-            // shop.zipCode = zipCode;
 
             await shop.save();
 
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
-                shop,
+                shop: sanitizeSeller(shop),
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -282,8 +288,10 @@ router.get(
     isAdmin('Admin'),
     catchAsyncErrors(async (req, res, next) => {
         try {
-            const sellers = await Shop.findAll({});
-            res.status(201).json({
+            const sellers = await Shop.findAll({
+                attributes: { exclude: ['password'] },
+            });
+            res.status(200).json({
                 success: true,
                 sellers,
             });
@@ -314,7 +322,7 @@ router.delete(
                 where: { shopId: seller.id },
             });
             await seller.destroy();
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
                 message: 'Đã xóa cửa hàng này thành công!',
             });
@@ -334,9 +342,9 @@ router.put(
 
             const seller = await Shop.findByPk(req.seller.id);
             await seller.update({ withdrawMethod: withdrawMethod });
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
-                seller,
+                seller: sanitizeSeller(seller),
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));
@@ -344,7 +352,7 @@ router.put(
     }),
 );
 
-// delete seller withdraw merthods --- only seller
+// delete seller withdraw methods --- only seller
 router.delete(
     '/delete-withdraw-method/',
     isSeller,
@@ -356,9 +364,9 @@ router.delete(
             }
             seller.withdrawMethod = null;
             await seller.save();
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
-                seller,
+                seller: sanitizeSeller(seller),
             });
         } catch (error) {
             return next(new ErrorHandler(error.message, 500));

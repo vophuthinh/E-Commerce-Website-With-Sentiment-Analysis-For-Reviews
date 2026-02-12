@@ -5,6 +5,7 @@ const express = require("express");
 const { isSeller, isAuthenticated, isAdmin } = require("../middleware/auth");
 const Withdraw = require("../model/withdraw");
 const sendMail = require("../utils/sendMail");
+const safeJSONParse = require("../utils/safeJSONParse");
 const router = express.Router();
 
 // create withdraw request --- only for seller
@@ -40,7 +41,7 @@ router.post(
         await sendMail({
           email: req.seller.email,
           subject: "Withdraw Request",
-          message: `Xin chào ${req.seller.name},Yêu cầu rút tiền của bạn ${amount}$ đang được xử lý. Sẽ mất 1 khoảng thời gian cho việc rút tiền, vui lòng đợi từ 3 - 5 ngày! `,
+          message: `Xin chào ${req.seller.name}, Yêu cầu rút tiền của bạn ${amount}$ đang được xử lý. Sẽ mất 1 khoảng thời gian cho việc rút tiền, vui lòng đợi từ 3 - 5 ngày!`,
         });
       } catch (error) {
         // Log error but the transaction is successful
@@ -57,8 +58,7 @@ router.post(
   })
 );
 
-// get all withdraws --- admnin
-
+// get all withdraws --- admin
 router.get(
   "/get-all-withdraw-request",
   isAuthenticated,
@@ -69,16 +69,14 @@ router.get(
         order: [['createdAt', 'DESC']]
       });
 
-      // Parse JSON fields if necessary
+      // Parse JSON fields
       const updatedWithdraws = withdraws.map(w => {
         const wd = w.toJSON();
-        if (typeof wd.seller === 'string') {
-          try { wd.seller = JSON.parse(wd.seller); } catch (e) { }
-        }
+        wd.seller = safeJSONParse(wd.seller, {});
         return wd;
       });
 
-      res.status(201).json({
+      res.status(200).json({
         success: true,
         withdraws: updatedWithdraws,
       });
@@ -116,24 +114,14 @@ router.put(
         status: withdraw.status,
       };
 
-      // Assuming transections is a JSON field in Shop
-      let currentTransactions = seller.transections;
-      // Handle parsing if it comes as string or JSON
-      try {
-        if (typeof currentTransactions === 'string') {
-          currentTransactions = JSON.parse(currentTransactions);
-        }
-      } catch (e) {
-        currentTransactions = [];
-      }
+      // Parse existing transactions
+      let currentTransactions = safeJSONParse(seller.transections, []);
 
       if (!Array.isArray(currentTransactions)) {
         currentTransactions = [];
       }
 
       currentTransactions.push(transaction);
-
-      // Update shop JSON field
       seller.transections = currentTransactions;
 
       await seller.save();
@@ -142,12 +130,12 @@ router.put(
         await sendMail({
           email: seller.email,
           subject: "Payment confirmation",
-          message: `Xin chào ${seller.name}, yêu cầu rút tiền của bạn ${withdraw.amount} đang được gửi . Thời gian giao hàng phụ thuộc vào quy định của ngân hàng, thường mất từ ​​3 ngày đến 7 ngày.`,
+          message: `Xin chào ${seller.name}, yêu cầu rút tiền của bạn ${withdraw.amount} đang được gửi. Thời gian giao hàng phụ thuộc vào quy định của ngân hàng, thường mất từ 3 ngày đến 7 ngày.`,
         });
       } catch (error) {
-        return next(new ErrorHandler(error.message, 500));
+        console.error("Email sending failed:", error);
       }
-      res.status(201).json({
+      res.status(200).json({
         success: true,
         withdraw,
       });

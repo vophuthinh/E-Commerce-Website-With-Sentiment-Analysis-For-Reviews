@@ -299,27 +299,52 @@ const ProductDetailsInfo = ({ data, products, totalReviewsLength, averageRating 
                                     <div className="pl-2 m-2">
                                         {review.sentiment ? (
                                             <div>
-                                                <div className={`px-2 py-1 rounded-full text-xs font-semibold w-fit
-                                                    ${review.sentiment.label === 'POS' ? 'bg-green-100 text-green-800' :
-                                                        review.sentiment.label === 'NEG' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                                                    {review.sentiment.label === 'POS' ? 'Tích cực' :
-                                                        review.sentiment.label === 'NEG' ? 'Tiêu cực' : 'Trung tính'}
-                                                    <span className="ml-1 text-[10px] opacity-75">
-                                                        ({(review.sentiment.score * 100).toFixed(0)}%)
-                                                    </span>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <div className={`px-2 py-1 rounded-full text-xs font-semibold w-fit
+                                                        ${review.sentiment.label === 'POS' ? 'bg-green-100 text-green-800' :
+                                                            review.sentiment.label === 'NEG' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                        {review.sentiment.label === 'POS' ? 'Tích cực' :
+                                                            review.sentiment.label === 'NEG' ? 'Tiêu cực' : 'Trung tính'}
+                                                        <span className="ml-1 text-[10px] opacity-75">
+                                                            ({(review.sentiment.score * 100).toFixed(0)}%)
+                                                        </span>
+                                                    </div>
+
+                                                    {review.sentiment.isMixed && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200">
+                                                            Cảm xúc hỗn hợp
+                                                        </span>
+                                                    )}
+
+                                                    {review.sentiment.sarcasmDetected && (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                                                            ⚠ Có dấu hiệu mỉa mai
+                                                        </span>
+                                                    )}
+
+                                                    {review.isEdited && (
+                                                        <span className="text-[10px] text-gray-400 italic">
+                                                            (đã chỉnh sửa)
+                                                        </span>
+                                                    )}
                                                 </div>
 
-                                                {/* Display Aspects */}
                                                 {review.sentiment.aspects && review.sentiment.aspects.length > 0 && (
                                                     <div className="flex flex-wrap gap-1 mt-1">
-                                                        {review.sentiment.aspects.map((aspect, idx) => (
-                                                            <span key={idx} className={`px-2 py-0.5 rounded textxs font-medium border ${aspect.label.includes('tốt') || aspect.label.includes('nhanh') || aspect.label.includes('rẻ')
-                                                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                                                : 'bg-orange-50 text-orange-700 border-orange-200'
-                                                                }`}>
-                                                                {aspect.label}
-                                                            </span>
-                                                        ))}
+                                                        {review.sentiment.aspects.map((aspect, idx) => {
+                                                            const isPositive = ['tốt', 'nhanh', 'hợp lý', 'Đúng', 'Hài lòng', 'Sẽ mua', 'Giới thiệu', 'Đánh giá cao', 'Vượt kỳ vọng'].some(k => aspect.label.includes(k));
+                                                            const isWarning = aspect.label.includes('⚠');
+                                                            const colorClass = isWarning
+                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                : isPositive
+                                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                                    : 'bg-orange-50 text-orange-700 border-orange-200';
+                                                            return (
+                                                                <span key={idx} className={`px-2 py-0.5 rounded text-xs font-medium border ${colorClass}`}>
+                                                                    {aspect.label}
+                                                                </span>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </div>

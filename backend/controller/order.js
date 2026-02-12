@@ -8,9 +8,29 @@ const Shop = require("../model/shop");
 const Product = require("../model/product");
 const safeJSONParse = require("../utils/safeJSONParse");
 
+/**
+ * Helper: Parse and normalize an order for API response.
+ * Converts JSON string fields and maps snake_case to camelCase aliases.
+ */
+function normalizeOrder(order) {
+  const obj = order.toJSON ? order.toJSON() : { ...order };
+  obj.cart = safeJSONParse(obj.cart, []);
+  obj.shipping_address = safeJSONParse(obj.shipping_address, {});
+  obj.user = safeJSONParse(obj.user, {});
+  obj.paymentInfo = safeJSONParse(obj.paymentInfo, {});
+  // Aliases for frontend compatibility
+  obj.shippingAddress = obj.shipping_address;
+  obj.totalPrice = obj.total_price;
+  obj.paidAt = obj.paid_at;
+  obj.deliveredAt = obj.delivered_at;
+  obj.createdAt = obj.created_at;
+  return obj;
+}
+
 // create new order
 router.post(
   "/create-order",
+  isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const { cart, shippingAddress, user, paymentInfo } = req.body;
@@ -77,31 +97,19 @@ router.post(
 // get all orders of user
 router.get(
   "/get-all-orders/:userId",
+  isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const orders = await Order.findAll({
-        where: { "user.id": req.params.userId },
-      })
-      const updatedProducts = orders.map(product => {
-        const newProduct = product.toJSON();
-        newProduct.cart = safeJSONParse(newProduct.cart, []);
-        newProduct.shipping_address = safeJSONParse(newProduct.shipping_address, {});
-        newProduct.user = safeJSONParse(newProduct.user, {});
-        newProduct.paymentInfo = safeJSONParse(newProduct.paymentInfo, {});
-        return newProduct;
+      const orders = await Order.findAll({});
+      // Filter in JS since Sequelize JSON query on nested fields is unreliable
+      const filteredOrders = orders.filter((order) => {
+        const user = safeJSONParse(order.user, {});
+        return String(user.id) === String(req.params.userId);
       });
-      const newUpdatedProducts = updatedProducts.map(product => ({
-        ...product,
-        shippingAddress: product.shipping_address,
-        totalPrice: product.total_price,
-        paidAt: product.paid_at,
-        deliveredAt: product.delivered_at,
-        createdAt: product.created_at
-
-      }));
+      const normalizedOrders = filteredOrders.map(normalizeOrder);
       res.status(200).json({
         success: true,
-        orders: newUpdatedProducts,
+        orders: normalizedOrders,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -112,31 +120,19 @@ router.get(
 // get all orders of seller
 router.get(
   "/get-seller-all-orders/:shopId",
+  isSeller,
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const orders = await Order.findAll({
-        "cart.shopId": req.params.shopId,
-      })
-      const updatedProducts = orders.map(product => {
-        const newProduct = product.toJSON();
-        newProduct.cart = safeJSONParse(newProduct.cart, []);
-        newProduct.shipping_address = safeJSONParse(newProduct.shipping_address, {});
-        newProduct.user = safeJSONParse(newProduct.user, {});
-        newProduct.paymentInfo = safeJSONParse(newProduct.paymentInfo, {});
-        return newProduct;
+      const orders = await Order.findAll({});
+      // Filter orders that contain items belonging to this shop
+      const filteredOrders = orders.filter((order) => {
+        const cart = safeJSONParse(order.cart, []);
+        return Array.isArray(cart) && cart.some((item) => String(item.shopId) === String(req.params.shopId));
       });
-      const newUpdatedProducts = updatedProducts.map(product => ({
-        ...product,
-        shippingAddress: product.shipping_address,
-        totalPrice: product.total_price,
-        paidAt: product.paid_at,
-        deliveredAt: product.delivered_at,
-        createdAt: product.created_at
-
-      }));
+      const normalizedOrders = filteredOrders.map(normalizeOrder);
       res.status(200).json({
         success: true,
-        orders: newUpdatedProducts,
+        orders: normalizedOrders,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -159,17 +155,10 @@ router.put(
       }
 
       // Check ownership
-      let cartItems = order.cart;
-      if (typeof cartItems === 'string') {
-        try {
-          cartItems = JSON.parse(cartItems);
-        } catch (e) {
-          cartItems = [];
-        }
-      }
+      let cartItems = safeJSONParse(order.cart, []);
       // Assuming all items in an order belong to the same shop as per create-order logic
       if (Array.isArray(cartItems) && cartItems.length > 0) {
-        if (cartItems[0].shopId !== req.seller.id) {
+        if (String(cartItems[0].shopId) !== String(req.seller.id)) {
           return next(new ErrorHandler("Bạn không có quyền cập nhật đơn hàng này", 403));
         }
       }
@@ -181,16 +170,9 @@ router.put(
       order.status = req.body.status;
 
       if (req.body.status === "Delivered") {
-        order.deliveredAt = Date.now();
+        order.delivered_at = new Date();
 
-        let infoPayment = order.paymentInfo;
-        if (typeof infoPayment === 'string') {
-          try {
-            infoPayment = JSON.parse(infoPayment);
-          } catch (e) {
-            infoPayment = {};
-          }
-        }
+        let infoPayment = safeJSONParse(order.paymentInfo, {});
 
         if (infoPayment) {
           infoPayment.status = "Succeeded";
@@ -200,17 +182,12 @@ router.put(
         const serviceCharge = order.total_price * 0.1;
         await updateSellerInfo(order.total_price - serviceCharge);
       }
-      await order.save({ validateBeforeSave: false });
+      await order.save();
       res.status(200).json({
         success: true,
         order,
       });
-      async function updateOrder(id, qty) {
-        const product = await Product.findByPk(id);
-        product.stock -= qty;
-        product.sold_out += qty;
-        await product.save({ validateBeforeSave: false });
-      }
+
       async function updateSellerInfo(amount) {
         const seller = await Shop.findByPk(req.seller.id);
         const currentBalance = parseFloat(seller.availableBalance) || 0;
@@ -226,6 +203,7 @@ router.put(
 // give a refund ----- user
 router.put(
   "/order-refund/:id",
+  isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
     try {
       const order = await Order.findByPk(req.params.id);
@@ -236,9 +214,15 @@ router.put(
         );
       }
 
+      // Verify the order belongs to the requesting user
+      const orderUser = safeJSONParse(order.user, {});
+      if (String(orderUser.id) !== String(req.user.id)) {
+        return next(new ErrorHandler("Bạn không có quyền yêu cầu hoàn tiền cho đơn hàng này", 403));
+      }
+
       order.status = req.body.status;
 
-      await order.save({ validateBeforeSave: false });
+      await order.save();
 
       res.status(200).json({
         success: true,
@@ -275,14 +259,7 @@ router.put(
       });
 
       if (req.body.status === "Refund Success") {
-        let cartOrder = order.cart;
-        if (typeof cartOrder === 'string') {
-          try {
-            cartOrder = JSON.parse(cartOrder);
-          } catch (e) {
-            cartOrder = [];
-          }
-        }
+        let cartOrder = safeJSONParse(order.cart, []);
         if (!Array.isArray(cartOrder)) cartOrder = [];
 
         for (const o of cartOrder) {
@@ -291,10 +268,11 @@ router.put(
       }
       async function updateOrder(id, qty) {
         const product = await Product.findByPk(id);
-        product.stock += qty;
-        product.sold_out -= qty;
-
-        await product.save({ validateBeforeSave: false });
+        if (product) {
+          product.stock += qty;
+          product.sold_out -= qty;
+          await product.save();
+        }
       }
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));
@@ -306,29 +284,14 @@ router.put(
 router.get(
   "/admin-all-orders",
   isAuthenticated,
-  // isAdmin("Admin"),
+  isAdmin("Admin"),
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const orders = await Order.findAll({})
-      const updatedProducts = orders.map(product => {
-        const newProduct = product.toJSON();
-        newProduct.cart = safeJSONParse(newProduct.cart, []);
-        newProduct.shipping_address = safeJSONParse(newProduct.shipping_address, {});
-        newProduct.user = safeJSONParse(newProduct.user, {});
-        newProduct.paymentInfo = safeJSONParse(newProduct.paymentInfo, {});
-        return newProduct;
-      });
-      const newUpdatedProducts = updatedProducts.map(product => ({
-        ...product,
-        shippingAddress: product.shipping_address,
-        totalPrice: product.total_price,
-        paidAt: product.paid_at,
-        deliveredAt: product.delivered_at,
-        createdAt: product.created_at
-      }));
-      res.status(201).json({
+      const orders = await Order.findAll({});
+      const normalizedOrders = orders.map(normalizeOrder);
+      res.status(200).json({
         success: true,
-        orders: newUpdatedProducts,
+        orders: normalizedOrders,
       });
     } catch (error) {
       return next(new ErrorHandler(error.message, 500));

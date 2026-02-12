@@ -5,8 +5,6 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const path = require("path");
-const axios = require("axios");
-const mongoSanitize = require("express-mongo-sanitize");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
@@ -32,11 +30,8 @@ app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 
-// Security headers with Helmet (includes XSS protection)
+// Security headers with Helmet
 app.use(helmet());
-
-// Data sanitization against NoSQL query injection
-// app.use(mongoSanitize());
 
 // Static files
 app.use("/", express.static(path.join(__dirname, "./uploads")));

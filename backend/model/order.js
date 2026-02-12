@@ -1,7 +1,5 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 
 const Order = sequelize.define(
   "Order",
@@ -26,6 +24,7 @@ const Order = sequelize.define(
       type: DataTypes.STRING,
       defaultValue: "Processing",
     },
+    // NOTE: payment_info is kept for backward compatibility with existing DB data
     payment_info: {
       type: DataTypes.JSON,
     },

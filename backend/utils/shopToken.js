@@ -10,9 +10,13 @@ const sendShopToken = (user, statusCode, res) => {
     secure: true,
   };
 
+  // Exclude password from response
+  const sellerObj = user.toJSON ? user.toJSON() : { ...user };
+  delete sellerObj.password;
+
   res.status(statusCode).cookie("seller_token", token, options).json({
     success: true,
-    user,
+    user: sellerObj,
     token,
   });
 };

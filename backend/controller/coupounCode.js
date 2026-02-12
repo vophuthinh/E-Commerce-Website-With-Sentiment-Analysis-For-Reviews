@@ -6,7 +6,7 @@ const { isSeller } = require("../middleware/auth");
 const CoupounCode = require("../model/coupounCode");
 const router = express.Router();
 
-// create coupoun code
+// create coupon code
 router.post(
   "/create-coupon-code",
   isSeller,
@@ -24,7 +24,7 @@ router.post(
         coupounCode,
       });
     } catch (error) {
-      return next(new ErrorHandler(error, 400));
+      return next(new ErrorHandler(error.message, 400));
     }
   })
 );
@@ -36,17 +36,17 @@ router.get(
   catchAsyncErrors(async (req, res, next) => {
     try {
       const couponCodes = await CoupounCode.findAll({ where: { shopId: req.seller.id } });
-      res.status(201).json({
+      res.status(200).json({
         success: true,
         couponCodes,
       });
     } catch (error) {
-      return next(new ErrorHandler(error, 400));
+      return next(new ErrorHandler(error.message, 400));
     }
   })
 );
 
-// delete coupoun code of a shop
+// delete coupon code of a shop
 router.delete(
   "/delete-coupon/:id",
   isSeller,
@@ -61,12 +61,12 @@ router.delete(
       if (!deletedCoupon) {
         return next(new ErrorHandler("Mã giảm giá không tồn tại!", 400));
       }
-      res.status(201).json({
+      res.status(200).json({
         success: true,
         message: "Đã xóa mã giảm giá thành công!",
       });
     } catch (error) {
-      return next(new ErrorHandler(error, 400));
+      return next(new ErrorHandler(error.message, 400));
     }
   })
 );
@@ -82,7 +82,7 @@ router.get(
         couponCode,
       });
     } catch (error) {
-      return next(new ErrorHandler(error, 400));
+      return next(new ErrorHandler(error.message, 400));
     }
   })
 );

@@ -51,18 +51,16 @@ const ShopProfileData = ({ isOwner }) => {
                 <div className="w-full flex">
                     <div className="flex items-center" onClick={() => setActive(1)}>
                         <h5
-                            className={`font-[600] text-[20px] ${
-                                active === 1 ? 'text-[#febd69] font-bold' : 'text-[#fff]'
-                            } cursor-pointer pr-[20px]`}
+                            className={`font-[600] text-[20px] ${active === 1 ? 'text-[#febd69] font-bold' : 'text-[#fff]'
+                                } cursor-pointer pr-[20px]`}
                         >
                             Products
                         </h5>
                     </div>
                     <div className="flex items-center" onClick={() => setActive(2)}>
                         <h5
-                            className={`font-[600] text-[20px] ${
-                                active === 2 ? 'text-[#febd69] font-bold' : 'text-[#fff]'
-                            } cursor-pointer pr-[20px]`}
+                            className={`font-[600] text-[20px] ${active === 2 ? 'text-[#febd69] font-bold' : 'text-[#fff]'
+                                } cursor-pointer pr-[20px]`}
                         >
                             Store Events
                         </h5>
@@ -70,9 +68,8 @@ const ShopProfileData = ({ isOwner }) => {
 
                     <div className="flex items-center" onClick={() => setActive(3)}>
                         <h5
-                            className={`font-[600] text-[20px] ${
-                                active === 3 ? 'text-[#febd69] font-bold' : 'text-[#fff]'
-                            } cursor-pointer pr-[20px]`}
+                            className={`font-[600] text-[20px] ${active === 3 ? 'text-[#febd69] font-bold' : 'text-[#fff]'
+                                } cursor-pointer pr-[20px]`}
                         >
                             Store Reviews
                         </h5>
@@ -151,25 +148,63 @@ const ShopProfileData = ({ isOwner }) => {
 
                                         {/* Cảm xúc chính */}
                                         {item.sentiment && (
-                                            <div className="mt-2 flex items-center space-x-2">
-                                                <span
-                                                    className={`px-2 py-1 rounded text-xs ${
-                                                        item.sentiment.label === 'POS'
+                                            <div className="mt-2">
+                                                <div className="flex items-center space-x-2 flex-wrap">
+                                                    <span
+                                                        className={`px-2 py-1 rounded text-xs font-semibold ${item.sentiment.label === 'POS'
                                                             ? 'bg-green-100 text-green-700'
                                                             : item.sentiment.label === 'NEG'
-                                                            ? 'bg-red-100 text-red-700'
-                                                            : 'bg-yellow-100 text-yellow-700'
-                                                    }`}
-                                                >
-                                                    {item.sentiment.label === 'POS'
-                                                        ? 'Positive'
-                                                        : item.sentiment.label === 'NEG'
-                                                        ? 'Negative'
-                                                        : 'Neutral'}
-                                                </span>
-                                                <span className="text-xs text-[#777777]">
-                                                    ({(item.sentiment.score * 100).toFixed(2)}%)
-                                                </span>
+                                                                ? 'bg-red-100 text-red-700'
+                                                                : 'bg-yellow-100 text-yellow-700'
+                                                            }`}
+                                                    >
+                                                        {item.sentiment.label === 'POS'
+                                                            ? 'Tích cực'
+                                                            : item.sentiment.label === 'NEG'
+                                                                ? 'Tiêu cực'
+                                                                : 'Trung tính'}
+                                                    </span>
+                                                    <span className="text-xs text-[#777777]">
+                                                        ({(item.sentiment.score * 100).toFixed(1)}%)
+                                                    </span>
+
+                                                    {/* Mixed sentiment badge */}
+                                                    {item.sentiment.isMixed && (
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200">
+                                                            Cảm xúc hỗn hợp
+                                                        </span>
+                                                    )}
+
+                                                    {/* Sarcasm warning */}
+                                                    {item.sentiment.sarcasmDetected && (
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                                                            ⚠ Có dấu hiệu mỉa mai
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Display Aspects */}
+                                                {item.sentiment.aspects && item.sentiment.aspects.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                        {item.sentiment.aspects.map((aspect, idx) => {
+                                                            const isPositive = ['tốt', 'nhanh', 'hợp lý', 'Đúng', 'Hài lòng', 'Sẽ mua', 'Giới thiệu', 'Đánh giá cao', 'Vượt kỳ vọng'].some(k => aspect.label.includes(k));
+                                                            const isWarning = aspect.label.includes('⚠');
+                                                            const colorClass = isWarning
+                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                : isPositive
+                                                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                                    : 'bg-orange-50 text-orange-700 border-orange-200';
+                                                            return (
+                                                                <span
+                                                                    key={idx}
+                                                                    className={`px-2 py-0.5 rounded text-xs font-medium border ${colorClass}`}
+                                                                >
+                                                                    {aspect.label}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
